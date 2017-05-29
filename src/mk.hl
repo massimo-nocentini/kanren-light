@@ -1,0 +1,114 @@
+(* ========================================================================= *)
+(* Karen Light.                                                              *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Chains.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+type 'a chain = Empty | Link of 'a * ('a -> 'a chain);; 
+
+let rec mplus (c1: 'a chain) (c2: 'a chain) : 'a chain =
+   match c1 with
+     Empty -> c2
+   | Link (x, f) -> Link (x, fun a -> mplus c2 (f x));;
+
+let rec mplusf (c1: 'a chain) (c2: unit -> 'a chain) : 'a chain =
+   match c1 with
+     Empty -> c2 ()
+   | Link (x, f) -> Link (x, fun a -> mplus (c2 ()) (f x));;
+
+let empty = function Empty -> true | _ -> false;;
+
+let next : 'a chain -> 'a chain =
+  function
+    Empty -> failwith "empty chain"
+  | Link (x,f) -> f x;;
+
+let get : 'a chain -> 'a =
+  function
+    Empty -> failwith "empty chain"
+  | Link (x,_) -> x;;
+
+let rec bind (c : 'a chain) (g : 'a -> 'b chain) : 'b chain =
+  match c with
+    Empty -> Empty
+  | Link (x,f) ->
+      mplusf (g x) (fun () -> bind (f x) g);;
+
+let rec take n =
+  function
+    Empty -> []
+  | Link (x,s) -> if n > 0 then x :: take (n-1) (s x) else [];;
+
+let singleton (x : 'a) : 'a chain =
+  Link(x, fun _ -> Empty);;
+
+let rec const (x : 'a) : 'a chain =
+  Link(x, fun _ -> const x);;
+
+let rec nats n = Link(n, fun _ -> nats (n+1));;
+
+take 10 (mplus (const 2) (const 0));;
+
+take 30 (bind (nats 1) (fun n -> const (2 * n)));;
+
+type status = (term, term) func;;
+
+let fresh_var s v = variant (dom s) v;;
+
+type goal = status -> status chain;;
+
+let failure : goal = fun s -> Empty;;
+
+let succeed : goal = fun s -> Link (s, failure);;
+
+let fresh_int : unit -> int =
+  let count = ref 0 in
+  fun () ->
+    let n = !count in
+    count := n + 1;
+    n;;
+
+let fresh (c : term -> goal) : goal =
+  fun s ->
+    let v = fresh_var s (mk_var("n"^string_of_int(fresh_int()),`:num`)) in
+    c v s;;
+
+let unification tm1 tm2 : status -> status =
+  fun s ->
+    if is_var tm1 then (tm1 |-> tm2) s else
+    if is_var tm2 then (tm2 |-> tm1) s else
+    if is_const tm1 && is_const tm2 && tm1 = tm2 then s else
+    if is_comb tm1 && is_comb tm2
+    then let f1,x1 = dest_comb tm1 in
+         let f2,x2 = dest_comb tm2 in
+         let s' = unification x1 x2 s in
+         unification f1 f2 s'
+    else fail();;
+
+let unify tm1 tm2 : goal =
+  fun s -> succeed (unification tm1 tm2 s);;
+
+let disj (g1:goal) (g2:goal) : goal =
+  fun s -> mplus (g1 s) (g2 s);;
+
+let conj (g1:goal) (g2:goal) : goal =
+  fun s -> bind (g1 s) g2;;
+
+(* `p 1 2 \/ p 2 3 \/ p 2 4` *)
+let gg =
+  fresh (fun x -> fresh (fun y ->
+    end_itlist disj
+      [conj (unify x `1`) (unify y `2`);
+       conj (unify x `2`) (unify y `3`);
+       conj (unify x `3`) (unify y `4`)]));;
+
+let gg =
+  fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
+
+hd (take 10 (gg undefined));;
+graph it;;
+
+let tm = `p 1 2:bool`;;
+let ftm,args = strip_comb tm;;
