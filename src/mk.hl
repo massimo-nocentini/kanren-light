@@ -16,7 +16,18 @@ let rec mplus (c1: 'a chain) (c2: 'a chain) : 'a chain =
 let rec mplusf (c1: 'a chain) (c2: unit -> 'a chain) : 'a chain =
    match c1 with
      Empty -> c2 ()
-   | Link (x, f) -> Link (x, fun a -> mplus (c2 ()) (f x));;
+   | Link (x, f) -> Link (x, fun a -> mplusf (c2 ()) (fun () -> f x));;
+
+let rec bind (c : 'a chain) (g : 'a -> 'b chain) : 'b chain =
+  match c with
+    Empty -> Empty
+  | Link (x,f) -> mplusf (g x) (fun () -> bind (f x) g);;
+  (* if the previous line was:
+  | Link (x,f) -> mplus (g x) (bind (f x) g);;
+  the it entails a stack overflow during evaluation (looping recursion?),
+  therefore we introduced ``mplusf`` to suspend the evaluation for the rest of
+  the chain.
+  *)
 
 let empty = function Empty -> true | _ -> false;;
 
@@ -30,30 +41,36 @@ let get : 'a chain -> 'a =
     Empty -> failwith "empty chain"
   | Link (x,_) -> x;;
 
-let rec bind (c : 'a chain) (g : 'a -> 'b chain) : 'b chain =
-  match c with
-    Empty -> Empty
-  | Link (x,f) ->
-      mplusf (g x) (fun () -> bind (f x) g);;
 
 let rec take n =
   function
     Empty -> []
   | Link (x,s) -> if n > 0 then x :: take (n-1) (s x) else [];;
 
-let singleton (x : 'a) : 'a chain =
-  Link(x, fun _ -> Empty);;
+let singleton (x : 'a) : 'a chain = Link(x, fun _ -> Empty);;
 
-let rec const (x : 'a) : 'a chain =
-  Link(x, fun _ -> const x);;
+let rec const (x : 'a) : 'a chain = Link(x, fun _ -> const x);;
 
 let rec nats n = Link(n, fun _ -> nats (n+1));;
 
-take 10 (mplus (const 2) (const 0));;
+let twos_and_zeros_test = assert ([2; 0; 2; 0; 2; 0; 2; 0; 2; 0] = 
+                                  (take 10 (mplus (const 2) (const 0))));;
 
-take 30 (bind (nats 1) (fun n -> const (2 * n)));;
+let bind_test = assert ([2; 4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4; 2; 10; 2; 4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4] = 
+                        (take 30 (bind (nats 1) (fun n -> const (2 * n)))));;
+(*
+    previous result should be interpreted as follows:
+    2₀ 2₂ 2₄ 2₆ 2₈ 2₁₀ 2₁₂ 2₁₄ 2₁₆ 2₁₈ 2₂₀ 2₂₂ 2₂₄ 2₂₆  2₂₈
+    4₁ 4₅ 4₉ 4₁₃ 4₁₇ 4₂₁ 4₂₅ 4₂₉
+    6₃ 6₁₁ 6₁₉ 6₂₇
+    8₇ 8₂₃ 
+    10₁₅ 
+    where subscripts denotes positions in the list of items they are attached to.
+*)
 
 type status = (term, term) func;;
+
+let empty_status = undefined;;
 
 let fresh_var s v = variant (dom s) v;;
 
@@ -75,7 +92,7 @@ let fresh (c : term -> goal) : goal =
     let v = fresh_var s (mk_var("n"^string_of_int(fresh_int()),`:num`)) in
     c v s;;
 
-let unification tm1 tm2 : status -> status =
+let rec unification tm1 tm2 : status -> status =
   fun s ->
     if is_var tm1 then (tm1 |-> tm2) s else
     if is_var tm2 then (tm2 |-> tm1) s else
@@ -91,7 +108,7 @@ let unify tm1 tm2 : goal =
   fun s -> succeed (unification tm1 tm2 s);;
 
 let disj (g1:goal) (g2:goal) : goal =
-  fun s -> mplus (g1 s) (g2 s);;
+  fun s -> mplusf (g1 s) (fun () -> g2 s);;
 
 let conj (g1:goal) (g2:goal) : goal =
   fun s -> bind (g1 s) g2;;
@@ -104,11 +121,11 @@ let gg =
        conj (unify x `2`) (unify y `3`);
        conj (unify x `3`) (unify y `4`)]));;
 
-let gg =
-  fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
 
-hd (take 10 (gg undefined));;
-graph it;;
+let gg = fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
+
+let simple_unify_test = assert ([(`n0:num`, `1`); (`n1:num`, `5`)] = 
+                                (let it = hd (take 10 (gg empty_status)) in graph it));;
 
 let tm = `p 1 2:bool`;;
 let ftm,args = strip_comb tm;;
