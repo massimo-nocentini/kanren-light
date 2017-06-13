@@ -1,0 +1,9 @@
+g `p a b /\ p b c /\ (!x y z. p x y /\ n y z ==> n x z) ==> ?x. n a x`;;
+e (INTRO_TAC "hp1 hp2 rule");;
+e (USE_THEN "rule" KANREN_TAC);;
+
+?- ?x y. p a y /\ n y x
+
+?1- ?x y. p a x
+?2- ?x ?w. n (b w) x
+ 
