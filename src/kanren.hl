@@ -105,8 +105,7 @@ let (VALID:tactic->tactic) =
 (* Various simple combinators for tactics, identity tactic etc.              *)
 (* ------------------------------------------------------------------------- *)
 
-let propagate_empty (i:instantiation) ([]:thm list) : thm list = []
-and propagate_thm th i ([]:thm list) : thm = INSTANTIATE_ALL i th;;
+let propagate_empty (i:instantiation) ([]:thm list) : thm list = [];;
 
 let compose_justs
     (n:int)
@@ -144,8 +143,7 @@ let justsequence
 let (tacsequence : goalstate -> tactic list -> goalstate) =
   fun ((mvs1,insts1),gls1,just1) tacl ->
     let ((mvs2,insts2),gls2,just2) = seqapply tacl gls1 in
-    let jst = justsequence just1 just2 insts2 in
-    let just = if gls2 = [] then propagate_thm (jst null_inst []) else jst in
+    let just = justsequence just1 just2 insts2 in
     ((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just);;
 
 let (thenl_: tactic -> tactic list -> tactic) =
