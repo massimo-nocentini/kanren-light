@@ -138,31 +138,28 @@ let justsequence
     (just1:justification)
     (just2:instantiation -> thm list -> thm list)
     (insts2:instantiation)
-    (i:instantiation)
-    (ths:thm list)
-    : thm =
-  just1 (compose_insts insts2 i) (just2 i ths);;
+    : justification =
+  fun i ths -> just1 (compose_insts insts2 i) (just2 i ths);;
 
-let tacsequence
-    (((mvs1:term list),(insts1:instantiation)),
-     (gls1:goal list),
-     (just1:justification))
-    (tacl:tactic list)
-    : goalstate =
-  let ((mvs2,insts2),gls2,just2) = seqapply tacl gls1 in
-  let jst = justsequence just1 just2 insts2 in
-  let just = if gls2 = [] then propagate_thm (jst null_inst []) else jst in
-  ((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just);;
+let (tacsequence : goalstate -> tactic list -> goalstate) =
+  fun ((mvs1,insts1),gls1,just1) tacl ->
+    let ((mvs2,insts2),gls2,just2) = seqapply tacl gls1 in
+    let jst = justsequence just1 just2 insts2 in
+    let just = if gls2 = [] then propagate_thm (jst null_inst []) else jst in
+    ((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just);;
 
 let (thenl_: tactic -> tactic list -> tactic) =
   fun tac1 tac2l g -> tacsequence (tac1 g) tac2l;;
 
+let (then_: tactic -> tactic -> tactic) =
+  fun tac1 tac2 g ->
+    let _,gls,_ as gstate = tac1 g in
+    tacsequence gstate (replicate tac2 (length gls));;
+
+(*
 let (THEN),(THENL) =
-  let (then_: tactic -> tactic -> tactic) =
-    fun tac1 tac2 g ->
-      let _,gls,_ as gstate = tac1 g in
-      tacsequence gstate (replicate tac2 (length gls))
   then_,thenl_;;
+*)
 
 let ((ORELSE): tactic -> tactic -> tactic) =
   fun tac1 tac2 g ->
