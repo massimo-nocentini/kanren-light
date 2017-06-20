@@ -1,0 +1,116 @@
+(* ========================================================================= *)
+(* Adapt the HOL Light tactic mechanism to a Kanren-like framework.          *)
+(* ========================================================================= *)
+
+parse_as_binder "META";;
+parse_as_infix ("ENTAILS",(0,"right"));;
+parse_as_infix ("AND",(1,"right"));;
+
+let META = new_definition `(META) = (?)`;;
+let ENTAILS = new_definition `(ENTAILS) = (==>)`;;
+let MAND = new_definition `(AND) = (/\)`;;
+
+let is_meta = is_binder "META";;
+let dest_meta = dest_binder "META";;
+let strip_meta = splitlist dest_meta;;
+
+let is_mand = is_binary "AND";;
+let dest_mand = dest_binary "AND";;
+let split_mand = striplist dest_mand;;
+
+let is_entails = is_binary "ENTAILS";;
+let dest_entails = dest_binary "ENTAILS";;
+
+let dest_kanren_goal tm =
+  let mvars,rtm = strip_meta tm in
+  try let btm,htm = dest_entails rtm in
+      mvars,(split_mand btm,htm)
+  with Failure _ -> mvars,([],rtm);;
+
+(* Example *)
+dest_kanren_goal
+  `META X.
+     X = 5 ==> fives X AND
+     fives X ==> fives X
+     ENTAILS
+     fives X`;;
+
+let propagate_thm i [th] = INSTANTIATE_ALL i th;;
+
+let set_kanren_goal tm =
+  let mvars,(tml,w) = dest_kanren_goal tm in
+  let asl = map (fun th -> "",ASSUME th) tml in
+  current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];;
+
+let fresh_thm th =
+  let tm = concl th in
+  let vars,_ = strip_forall tm in
+  let vars' = map (genvar o snd o dest_var) vars in
+  let bth = INST (zip vars' vars) (SPEC_ALL th) in
+  GENL vars' bth;;
+
+(* ------------------------------------------------------------------------- *)
+(* Generalized, Kanren-like tactics.                                         *)
+(* ------------------------------------------------------------------------- *)
+
+type ktactic = term list * goal -> goalstate;;
+
+let (MATCH_MP_KANREN : thm -> ktactic) =
+  fun th ->
+    let th' = fresh_thm th in
+    let vars,tm = strip_forall(concl th') in
+    let btm,htm = dest_imp tm in
+    fun mvl,(asl,w) ->
+      let newvars = vars@mvl in
+      let inst1 = term_unify newvars w htm in
+      let gl = asl,instantiate inst1 btm in
+      ((newvars,inst1),[gl],propagate_thm);;
+
+let (MATCH_ACCEPT_KANREN : thm -> ktactic) =
+  let propagate_thm th i [] = INSTANTIATE_ALL i th in
+  fun th ->
+    let th' = fresh_thm th in
+    let vars,tm = strip_forall(concl th') in
+    fun mvl,(asl,w) ->
+      let newvars = vars@mvl in
+      let inst1 = term_unify newvars w tm in
+      ((newvars,inst1),[],propagate_thm th');;
+
+let (kby:ktactic->refinement) =
+  fun ktac ((mvs,inst),gls,just) ->
+    if gls = [] then failwith "No goal set" else
+    let g = hd gls
+    and ogls = tl gls in
+    let ((newmvs,newinst),subgls,subjust) = ktac (mvs,g) in
+    let n = length subgls in
+    let mvs' = union newmvs mvs
+    and inst' = compose_insts inst newinst
+    and gls' = subgls @ map (inst_goal newinst) ogls in
+    let just' i ths =
+      let i' = compose_insts inst' i in
+      let cths,oths = chop_list n ths in
+      let sths = (subjust i cths) :: oths in
+      just i' sths in
+    (mvs',inst'),gls',just';;
+
+let ke ktac = refine(kby ktac);;
+
+(* ------------------------------------------------------------------------- *)
+(* Our favorite example.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+set_kanren_goal
+  `META X:A.
+     (!X. ancestor X X) AND
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`;;
+ke (MATCH_MP_KANREN
+  (ASSUME `!X':A Y':A Z':A. ancestor X' Y' /\ ancestor Y' Z' ==> ancestor X' Z'`));;
+e CONJ_TAC;;
+ke (MATCH_ACCEPT_KANREN (ASSUME `ancestor (pippo:A) (pluto:A) : bool`));;
+hd (!current_goalstack);;
+ke (MATCH_ACCEPT_KANREN (ASSUME `ancestor (pluto:A) (paperino:A) : bool`));;
+top_thm();;
