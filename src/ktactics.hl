@@ -2,6 +2,18 @@
 (* Adapt the HOL Light tactic mechanism to a Kanren-like framework.          *)
 (* ========================================================================= *)
 
+(* ------------------------------------------------------------------------- *)
+(* top_thm done right!                                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let ktop_thm() =
+  let ((_,inst),[],f)::_ = !current_goalstack in
+  f inst [];;
+
+(* ------------------------------------------------------------------------- *)
+(* Meta goals.                                                               *)
+(* ------------------------------------------------------------------------- *)
+
 parse_as_binder "META";;
 parse_as_infix ("ENTAILS",(0,"right"));;
 parse_as_infix ("AND",(1,"right"));;
@@ -28,26 +40,21 @@ let dest_kanren_goal tm =
   with Failure _ -> mvars,([],rtm);;
 
 (* Example *)
+(*
 dest_kanren_goal
   `META X.
      X = 5 ==> fives X AND
      fives X ==> fives X
      ENTAILS
      fives X`;;
+*)
 
-let propagate_thm i [th] = INSTANTIATE_ALL i th;;
-
-let set_kanren_goal tm =
-  let mvars,(tml,w) = dest_kanren_goal tm in
-  let asl = map (fun th -> "",ASSUME th) tml in
-  current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];;
-
-let fresh_thm th =
-  let tm = concl th in
-  let vars,_ = strip_forall tm in
-  let vars' = map (genvar o snd o dest_var) vars in
-  let bth = INST (zip vars' vars) (SPEC_ALL th) in
-  GENL vars' bth;;
+let set_kanren_goal =
+  let propagate_thm i [th] = INSTANTIATE_ALL i th in
+  fun tm ->
+    let mvars,(tml,w) = dest_kanren_goal tm in
+    let asl = map (fun th -> "",ASSUME th) tml in
+    current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];;
 
 (* ------------------------------------------------------------------------- *)
 (* Generalized, Kanren-like tactics.                                         *)
@@ -57,15 +64,54 @@ type kgoal = term list* goal;;
 
 type ktactic = kgoal -> goalstate;;
 
-let propagate_mp rth i [th] =
-  Format.print_string "propagate_mp:\n rth = ";
-  print_thm rth; Format.print_newline();
-  print_thm th; Format.print_newline();
-  print_thm (INSTANTIATE_ALL i rth); Format.print_newline();
-  try MP (INSTANTIATE_ALL i rth) th with
-    Failure _ -> failwith "propagate_mp";;
+type thm_ktactic = thm -> ktactic;;
 
-let (MATCH_MP_KANREN : thm -> ktactic) =
+(* ------------------------------------------------------------------------- *)
+(* Debug tools.                                                              *)
+(* ------------------------------------------------------------------------- *)
+
+let trace_justification : string -> justification -> justification =
+  fun s just ((_,alist,_) as inst) ths ->
+    Format.print_string ("trace_justification "^s);
+    Format.print_string ": ";
+    do_list (fun (tm,v) -> print_qterm tm;
+                           Format.print_string " <- ";
+                           print_qterm v;
+                           Format.print_string ", ")
+            alist;
+    Format.print_newline();
+    do_list (fun th -> print_thm th; Format.print_newline()) ths;
+    try just inst ths with
+      Failure _ -> failwith "trace_justification: justification failed";;
+
+let trace_ktactic msg ktac (mvs,g) =
+  Format.print_string "trace_ktactic ";
+  Format.print_string msg;
+  Format.print_string ":\nMetas: ";
+  do_list (fun tm -> print_qterm tm; Format.print_string ", ") mvs;
+  Format.print_string "\nGoal:\n";
+  print_goal g;
+  Format.print_newline();
+  ktac (mvs,g);;
+
+(* ------------------------------------------------------------------------- *)
+(* Basic tactics.                                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let fresh_thm th =
+  let tm = concl th in
+  let vars,_ = strip_forall tm in
+  let vars' = map (genvar o snd o dest_var) vars in
+  let bth = INST (zip vars' vars) (SPEC_ALL th) in
+  GENL vars' bth;;
+
+let propagate_mp rth i [th] =
+  Format.print_string "propagate_mp:\n";
+  print_thm rth; Format.print_newline();
+  print_thm (INSTANTIATE_ALL i rth); Format.print_newline();
+  MP (INSTANTIATE_ALL i rth) th;;
+
+let (MATCH_MP_KTAC : thm -> ktactic) =
   fun th ->
     let th' = fresh_thm th in
     let vars,tm = strip_forall(concl th') in
@@ -74,112 +120,44 @@ let (MATCH_MP_KANREN : thm -> ktactic) =
       let newvars = vars@mvl in
       let inst1 = term_unify newvars w htm in
       let gl = asl,instantiate inst1 btm in
-      ((newvars,inst1),[gl],propagate_mp (SPEC_ALL th'));;
+      ((newvars,inst1),[gl],
+       trace_justification "MATCH_MP_KTAC" (propagate_mp (SPEC_ALL th')));;
 
-let (MATCH_ACCEPT_KANREN : thm -> ktactic) =
+let (MATCH_ACCEPT_KTAC : thm -> ktactic) =
   let propagate_thm th i [] =
     try INSTANTIATE_ALL i th with
-      Failure _ -> failwith "MATCH_ACCEPT_KANREN justification" in
+      Failure _ -> failwith "MATCH_ACCEPT_KTAC justification" in
   fun th ->
     let th' = fresh_thm th in
     let vars,tm = strip_forall(concl th') in
     fun mvl,(asl,w) ->
       let newvars = vars@mvl in
       let inst1 = term_unify newvars w tm in
-      ((newvars,inst1),[],propagate_thm th');;
-
-let (kby:ktactic->refinement) =
-  fun ktac ((mvs,inst),gls,just) ->
-    if gls = [] then failwith "No goal set" else
-    let g = hd gls
-    and ogls = tl gls in
-    let ((newmvs,newinst),subgls,subjust) = ktac (mvs,g) in
-    let n = length subgls in
-    let mvs' = union newmvs mvs
-    and inst' = compose_insts inst newinst
-    and gls' = subgls @ map (inst_goal newinst) ogls in
-    let just' i ths =
-      let i' = compose_insts inst' i in
-      let cths,oths = chop_list n ths in
-      let sths = (subjust i cths) :: oths in
-      just i' sths in
-    (mvs',inst'),gls',just';;
-
-let ke ktac = refine(kby ktac);;
-
-let ktactic_of_tactic (tac:tactic) : ktactic =
-  fun (mvs,g) ->
-    let ((mvs',inst),gls,just) = tac g in
-    ((union mvs mvs',inst),gls,just);;
+      ((newvars,inst1),[],propagate_thm (SPEC_ALL th'));;
 
 (* ------------------------------------------------------------------------- *)
-(* Our favorite example.                                                     *)
-(* ------------------------------------------------------------------------- *)
-
-type thm_ktactic = thm -> ktactic;;
-
-let (FIRST_ASSUM_KANREN: thm_ktactic -> ktactic) =
-  fun tktac ((mvs,(asl,w)) as g) -> tryfind (fun (_,th) -> tktac th g) asl;;
-
-set_kanren_goal
-  `META X:A.
-     (!X. ancestor X X) AND
-     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
-     ancestor pippo pluto AND
-     ancestor pluto paperino
-     ENTAILS
-     ancestor pippo X`;;
-(*;;
-p();;
-ke (MATCH_MP_KANREN
-  (ASSUME `!X':A Y':A Z':A. ancestor X' Y' /\ ancestor Y' Z' ==> ancestor X' Z'`));;
-e CONJ_TAC;;
-ke (MATCH_ACCEPT_KANREN (ASSUME `ancestor (pippo:A) (pluto:A) : bool`));;
-hd (!current_goalstack);;
-ke (MATCH_ACCEPT_KANREN (ASSUME `ancestor (pluto:A) (paperino:A) : bool`));;
-top_thm();;
-*)
-
-p();;
-ke (FIRST_ASSUM_KANREN MATCH_MP_KANREN);;
-ke (ktactic_of_tactic CONJ_TAC);;
-ke (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN);;
-ke (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN);;
-top_thm();;
-
-(* ------------------------------------------------------------------------- *)
-(* Example without axioms.                                                   *)
+(* Questa variante di MATCH_ACCEPT_KTAC e' sbagliata perche' non da' le      *)
+(* informazioni necessarie sull'instanziazione che poi dovranno essere       *)
+(* applicate ai teoremi.                                                     *)
 (* ------------------------------------------------------------------------- *)
 
 (*
-needs "Library/rstc.ml";;
-
-let PARENT_RULES,PARENT_INDUCT,PARENT_CASES = new_inductive_definition
-  `PARENT 3 1 /\
-   PARENT 42 3`;;
-
-let PARENT_1,PARENT_2 = CONJ_PAIR PARENT_RULES;;
-
-set_kanren_goal
-  `META X:num. RTC PARENT 42 X`;;
-ke(MATCH_MP_KANREN (ISPEC `PARENT` RTC_TRANS));;
-ke (ktactic_of_tactic CONJ_TAC);;
-ke (MATCH_MP_KANREN (ISPEC `PARENT` RTC_INC));;
-ke (MATCH_ACCEPT_KANREN PARENT_2);;
-ke (MATCH_MP_KANREN (ISPEC `PARENT` RTC_INC));;
-ke (MATCH_ACCEPT_KANREN PARENT_1);;
-top_thm();;
+let (MATCH_ACCEPT_KTAC : thm -> ktactic) =
+  let propagate_thm th _ [] = th in
+  fun th ->
+    let th' = fresh_thm th in
+    let vars,tm = strip_forall(concl th') in
+    fun mvl,(asl,w) ->
+      let newvars = vars@mvl in
+      let inst1 = term_unify newvars w tm in
+      ((newvars,null_inst),[],propagate_thm (INSTANTIATE_ALL inst1 th'));;
 *)
 
 (* ------------------------------------------------------------------------- *)
-(* Various simple combinators for tactics, identity tactic etc.              *)
+(* Tactic composition.                                                       *)
 (* ------------------------------------------------------------------------- *)
 
 let propagate_empty (i:instantiation) ([]:thm list) : thm list = [];;
-
-(* ------------------------------------------------------------------------- *)
-(* Apply instantiation to a kgoal.                                           *)
-(* ------------------------------------------------------------------------- *)
 
 let (inst_kgoal:instantiation->kgoal->kgoal) =
   fun p (mvs,g) -> mvs,inst_goal p g;;
@@ -237,12 +215,203 @@ let (THEN),(THENL) =
   then_,thenl_;;
 *)
 
-
+(* ------------------------------------------------------------------------- *)
+(* Fail/resume reasoning patterns.                                           *)
 (* ------------------------------------------------------------------------- *)
 
-let ktop_thm() =
-  let ((_,inst),[],f)::_ = !current_goalstack in
-  f inst [];;
+let (korelse_: ktactic -> ktactic -> ktactic) =
+  fun ktac1 ktac2 g ->
+    try ktac1 g with Failure _ -> ktac2 g;;
+
+let (FAIL_KTAC: string -> ktactic) =
+  fun tok g -> failwith tok;;
+
+let (NO_KTAC: ktactic) =
+  FAIL_KTAC "NO_KTAC";;
+
+let (ALL_KTAC:ktactic) =
+  fun (mvs,g) -> (mvs,null_inst),[g],fun _ [th] -> th;;
+
+let KTRY ktac =
+  korelse_ ktac ALL_KTAC;;
+
+let rec KREPEAT ktac =
+  korelse_ (kthen_ ktac (KREPEAT ktac)) ALL_KTAC;;
+
+let KEVERY ktacl =
+  itlist kthen_ ktacl ALL_KTAC;;
+
+let (KFIRST: ktactic list -> ktactic) =
+  end_itlist korelse_;;
+
+let MAP_KEVERY ktacf lst =
+  KEVERY (mapfilter ktacf lst);;
+
+let MAP_KFIRST ktacf lst =
+  KFIRST (mapfilter ktacf lst);;
+
+let (CHANGED_KTAC: ktactic -> ktactic) =
+  fun ktac (mvs,g) as gs ->
+    let (meta,gl,_ as gstate) = ktac gs in
+    if meta = null_meta && length gl = 1 && hd gl = g
+    then failwith "CHANGED_KTAC" else gstate;;
+
+let rec REPLICATE_KTAC n ktac =
+  if n <= 0 then ALL_KTAC else kthen_ ktac (REPLICATE_KTAC (n - 1) ktac);;
+
+(* ------------------------------------------------------------------------- *)
+(* Higher-order tactics and tacticals.                                       *)
+(* ------------------------------------------------------------------------- *)
+
+(* Non va bene perche' non usa orelse_, si focalizza su una ipotesi. *)
+(*
+let (FIRST_ASSUM_KTAC: thm_ktactic -> ktactic) =
+  fun tktac ((mvs,(asl,w)) as g) -> tryfind (fun (_,th) -> tktac th g) asl;;
+*)
+
+let (FIRST_ASSUM_KTAC: thm_ktactic -> ktactic) =
+  fun ktac (mvs,(asl,w)) as kg ->
+    try MAP_KFIRST (fun (_,th) -> ktac th) asl kg with
+      Failure _ -> failwith "pippo";;
+
+(* ------------------------------------------------------------------------- *)
+(* Interactive use of tactics.                                               *)
+(* ------------------------------------------------------------------------- *)
+
+(* Version with redundant instatiation. *)
+(*
+let (kby:ktactic->refinement) =
+  fun ktac ((mvs,inst),gls,just) ->
+    if gls = [] then failwith "No goal set" else
+    let g = hd gls
+    and ogls = tl gls in
+    let ((newmvs,newinst),subgls,subjust) = ktac (mvs,g) in
+    let n = length subgls in
+    let mvs' = union newmvs mvs
+    and inst' = compose_insts inst newinst
+    and gls' = subgls @ map (inst_goal newinst) ogls in
+    let just' i ths =
+      let i' = compose_insts inst' i in
+      let cths,oths = chop_list n ths in
+      let sths = subjust i cths :: oths in
+      just i' sths in
+    (mvs',inst'),gls',just';;
+*)
+
+(* Con propagazione "ridotta" dell'instanziazione. *)
+let (kby:ktactic->refinement) =
+  fun ktac ((mvs,inst),gls,just) ->
+    if gls = [] then failwith "No goal set" else
+    let g = hd gls
+    and ogls = tl gls in
+    let ((newmvs,newinst),subgls,subjust) = ktac (mvs,g) in
+    let n = length subgls in
+    let mvs' = union newmvs mvs
+    and inst' = compose_insts inst newinst
+    and gls' = subgls @ map (inst_goal newinst) ogls in
+    let just' i ths =
+      let cths,oths = chop_list n ths in
+      let sths = subjust i cths :: oths in
+      just i sths in
+    (mvs',inst'),gls',just';;
+
+let ke ktac = refine(kby ktac);;
+
+let ktactic_of_tactic (tac:tactic) : ktactic =
+  fun (mvs,g) ->
+    let ((mvs',inst),gls,just) = tac g in
+    ((union mvs mvs',inst),gls,just);;
+
+(* ------------------------------------------------------------------------- *)
+(* Our favorite example.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+set_kanren_goal
+  `META X:A.
+     (!X. ancestor X X) AND
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`;;
+(*;;
+p();;
+ke (MATCH_MP_KTAC
+  (ASSUME `!X':A Y':A Z':A. ancestor X' Y' /\ ancestor Y' Z' ==> ancestor X' Z'`));;
+e CONJ_TAC;;
+ke (MATCH_ACCEPT_KTAC (ASSUME `ancestor (pippo:A) (pluto:A) : bool`));;
+hd (!current_goalstack);;
+ke (MATCH_ACCEPT_KTAC (ASSUME `ancestor (pluto:A) (paperino:A) : bool`));;
+top_thm();;
+*)
+
+p();;
+ke (FIRST_ASSUM_KTAC MATCH_MP_KTAC);;
+ke (ktactic_of_tactic CONJ_TAC);;
+ke (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC);;
+ke (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC);;
+ktop_thm();;
+
+set_kanren_goal
+  `META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`;;
+p ();;
+ke (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC);;
+ktop_thm();;
+
+set_kanren_goal
+  `META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`;;
+p ();;
+ke (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC);;
+ktop_thm();;
+
+(*
+let (KTAC_PROOF : kgoal * ktactic -> thm) =
+  fun (g,tac) ->
+    let gstate = mk_kgoalstate g in
+    let _,sgs,just = kby tac gstate in
+    if sgs = [] then just null_inst []
+    else failwith "KTAC_PROOF: Unsolved goals";;
+
+let kprove(t,ktac) =
+  let th = KTAC_PROOF(([],t),ktac) in
+  let t' = concl th in
+  if t' = t then th else
+  try EQ_MP (ALPHA t' t) th
+  with Failure _ -> failwith "kprove: justification generated wrong theorem";;
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Example without axioms.                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+(*
+needs "Library/rstc.ml";;
+
+let PARENT_RULES,PARENT_INDUCT,PARENT_CASES = new_inductive_definition
+  `PARENT 3 1 /\
+   PARENT 42 3`;;
+
+let PARENT_1,PARENT_2 = CONJ_PAIR PARENT_RULES;;
+
+set_kanren_goal
+  `META X:num. RTC PARENT 42 X`;;
+ke(MATCH_MP_KTAC (ISPEC `PARENT` RTC_TRANS));;
+ke (ktactic_of_tactic CONJ_TAC);;
+ke (MATCH_MP_KTAC (ISPEC `PARENT` RTC_INC));;
+ke (MATCH_ACCEPT_KTAC PARENT_2);;
+ke (MATCH_MP_KTAC (ISPEC `PARENT` RTC_INC));;
+ke (MATCH_ACCEPT_KTAC PARENT_1);;
+top_thm();;
+*)
+
+
+(* ------------------------------------------------------------------------- *)
 
 set_kanren_goal
   `META X:A.
@@ -255,42 +424,90 @@ set_kanren_goal
 p();;
 
 (* 0 : funziona! *)
-ke (kthen_ (FIRST_ASSUM_KANREN MATCH_MP_KANREN) (ktactic_of_tactic CONJ_TAC));;
-ke (trace_ktactic "*" (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN));;
-ke (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN);;
+ke (kthen_ (FIRST_ASSUM_KTAC MATCH_MP_KTAC) (ktactic_of_tactic CONJ_TAC));;
+ke (trace_ktactic "*" (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC));;
+ke (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC);;
 ktop_thm();;
 
 (* 1 : funziona! *)
-ke (kthen_ (kthen_ (FIRST_ASSUM_KANREN MATCH_MP_KANREN)
+ke (kthen_ (kthen_ (FIRST_ASSUM_KTAC MATCH_MP_KTAC)
                     (ktactic_of_tactic CONJ_TAC))
-           (trace_ktactic "#" (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN)));;
+           (trace_ktactic "#" (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)));;
 ktop_thm();;
 
 (* 2 : error tryfind *)
-ke (kthen_ (FIRST_ASSUM_KANREN MATCH_MP_KANREN)
+ke (kthen_ (FIRST_ASSUM_KTAC MATCH_MP_KTAC)
            (kthen_ (ktactic_of_tactic CONJ_TAC)
-                   (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN)));;
+                   (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)));;
 ktop_thm();;
 
 (* 3 : error tryfind *)
-ke (trace_ktactic "1" (FIRST_ASSUM_KANREN MATCH_MP_KANREN));;
+ke (trace_ktactic "1" (FIRST_ASSUM_KTAC MATCH_MP_KTAC));;
 ke (kthen_ (trace_ktactic "2" (ktactic_of_tactic CONJ_TAC))
-           (trace_ktactic "3" (FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN)));;
+           (trace_ktactic "3" (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)));;
 ktop_thm();;
 
 (* 4 : funziona! *)
-ke (kthenl_ (kthen_ (FIRST_ASSUM_KANREN MATCH_MP_KANREN)
+ke (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MATCH_MP_KTAC)
                     (ktactic_of_tactic CONJ_TAC))
-            [FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN;
-             FIRST_ASSUM_KANREN MATCH_ACCEPT_KANREN]);;
+            [FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC;
+             FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC]);;
 ktop_thm();;
 
-let trace_ktactic msg ktac (mvs,g) =
-  Format.print_string "trace_ktactic ";
-  Format.print_string msg;
-  Format.print_string ":\nMetas: ";
-  do_list (fun tm -> print_qterm tm; Format.print_string ", ") mvs;
-  Format.print_string "\nGoal:\n";
-  print_goal g;
-  Format.print_newline();
-  ktac (mvs,g);;
+
+
+(* ------------------------------------------------------------------------- *)
+
+(*
+set_kanren_goal
+  `META X:A.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     (!X. ancestor X X) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X AND ~(X = pippo)`;;
+p();;
+ke (korelse_ (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)
+             (FIRST_ASSUM_KTAC MATCH_MP_KTAC));;
+top_thm();;
+*)
+
+let FIND_KTAC:ktactic =
+  let rec find g =
+    (korelse_ (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)
+              (kthen_ (FIRST_ASSUM_KTAC MATCH_MP_KTAC)
+                      (kthen_ (ktactic_of_tactic (REPEAT CONJ_TAC))
+                              find))) g in
+  find;;
+
+(* Pb: Introdurre una meta implicazione?! *)
+(* Questo codice assume che l'implicazione non occorra nei goal. *)
+let APPLY_KTAC:thm_ktactic =
+  fun th -> try MATCH_MP_KTAC th with Failure _ -> MATCH_ACCEPT_KTAC th;;
+
+let PROLOG_KTAC:ktactic =
+  let rec prolog g =
+    kthen_ (FIRST_ASSUM_KTAC APPLY_KTAC)
+           (kthen_ (ktactic_of_tactic (REPEAT CONJ_TAC)) prolog)
+           g in
+  prolog;;
+
+set_kanren_goal
+  `(!X Y Z:A. l X Y /\ q Y Z ==> q X Z) AND
+   (!X:A. q X X) AND
+   (!X Y. l X Y ==> l Y X) AND
+   l d e AND l a c AND l a d AND l d c AND l b c
+   ENTAILS
+   q a b`;;
+p();;
+ke PROLOG_KTAC;;
+ke FIND_KTAC;;
+ktop_thm();;
+
+(*
+ke (korelse_ (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MATCH_MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ktop_thm();;
+*)
