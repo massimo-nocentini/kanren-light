@@ -511,3 +511,32 @@ ke (korelse_ (FIRST_ASSUM_KTAC MATCH_ACCEPT_KTAC)
                      (ktactic_of_tactic (REPEAT CONJ_TAC))));;
 ktop_thm();;
 *)
+
+(* ------------------------------------------------------------------------- *)
+(* Asymmetric unification.                                                   *)
+(* (Should help us to prevent metavariables pollution with                   *)
+(*  MATCH_MP_KTAC and MATCH_ACCEPT_KTAC).                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let gen_term_unify mv1 tm1 mv2 tm2 =
+  let mv1' = map (genvar o snd o dest_var) mv1 in
+  let tm1' = vsubst (zip mv1' mv1) tm1 in
+  let mv = union mv1' mv2 in
+  let inst = term_unify mv tm1' tm2 in
+  let tm = instantiate inst tm1' in
+  let mv0 = intersect mv1' (map (instantiate inst) mv1') in
+  let inst1 = term_unify (union mv1' mv0) tm1' tm in
+  let inst2 = term_unify (union mv2 mv0) tm2 tm in
+  (mv0,inst1,inst2);;
+
+(* Example:
+let tm1 = `ancestor (X:A) (Z:A) : bool`;;
+let tm2 = `ancestor (pippo:A) (X:A) : bool`;;
+gen_term_unify [`X:A`;`Y:A`;`Z:A`] tm1 [`X:A`] tm2;;
+*)
+
+(* Example:
+let tm1 = `X = X:num`;;
+let tm2 = `2 + A = B + 3`;;
+gen_term_unify [`X:num`; `Z:num`] tm1 [`A:num`;`B:num`] tm2;;
+*)
