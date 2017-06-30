@@ -3,6 +3,79 @@
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
+(* Modify the original printer for goals and goalstacs to print              *)
+(* metavariables.                                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let print_vars =
+  let print_var tm =
+    let s,ty = dest_var tm in
+    Format.print_string s;
+    Format.print_string ":";
+    print_type ty in
+  let rec print_rest = function
+    [] -> ()
+  | tm::tml -> Format.print_string ", "; print_var tm; print_rest tml in
+  function
+    [] -> ()
+  | tm::tml -> print_var tm; print_rest tml;;
+
+let (print_kgoal : kgoal->unit) =
+  let string_of_int3 n =
+    if n < 10 then "  "^string_of_int n
+    else if n < 100 then " "^string_of_int n
+    else string_of_int n in
+  let print_hyp n (s,th) =
+    open_hbox();
+    Format.print_string(string_of_int3 n);
+    Format.print_string " [";
+    open_hvbox 0;
+    print_qterm (concl th);
+    close_box();
+    Format.print_string "]";
+    (if not (s = "") then (Format.print_string (" ("^s^")")) else ());
+    close_box();
+    Format.print_newline() in
+  let rec print_hyps n asl =
+    if asl = [] then () else
+    (print_hyp n (hd asl);
+     print_hyps (n + 1) (tl asl)) in
+  fun mvs,(asl,w) ->
+    Format.print_newline();
+    if asl <> [] then (print_hyps 0 (rev asl); Format.print_newline()) else ();
+    if mvs <> [] then
+      (Format.print_string "Metas: ";
+       print_vars mvs;
+       Format.print_newline())
+    else ();
+    print_qterm w; Format.print_newline();;
+
+let (print_goalstack:goalstack->unit) =
+  let print_goalstate k gs =
+    let ((mvs,_),gl,_) = gs in
+    let n = length gl in
+    let s = if n = 0 then "No subgoals" else
+              (string_of_int k)^" subgoal"^(if k > 1 then "s" else "")
+           ^" ("^(string_of_int n)^" total)" in
+    Format.print_string s; Format.print_newline();
+    if gl = [] then () else
+    do_list (curry print_kgoal mvs o C el gl) (rev(0--(k-1))) in
+  fun l ->
+    if l = [] then Format.print_string "Empty goalstack"
+    else if tl l = [] then
+      let (_,gl,_ as gs) = hd l in
+      print_goalstate 1 gs
+    else
+      let (_,gl,_ as gs) = hd l
+      and (_,gl0,_) = hd(tl l) in
+      let p = length gl - length gl0 in
+      let p' = if p < 1 then 1 else p + 1 in
+      print_goalstate p' gs;;
+
+#install_printer print_goal;;
+#install_printer print_goalstack;;
+
+(* ------------------------------------------------------------------------- *)
 (* top_thm done right!                                                       *)
 (* ------------------------------------------------------------------------- *)
 
@@ -66,6 +139,11 @@ type ktactic = kgoal -> goalstate;;
 
 type thm_ktactic = thm -> ktactic;;
 
+let (inst_kgoal:instantiation->kgoal->kgoal) =
+  fun p (mvs,g) ->
+    let mvs' = intersect mvs (freesl (map (instantiate p) mvs)) in
+    mvs',inst_goal p g;;
+
 (* ------------------------------------------------------------------------- *)
 (* Debug tools.                                                              *)
 (* ------------------------------------------------------------------------- *)
@@ -105,29 +183,10 @@ let fresh_thm th =
   GENL vars' bth';;
 
 (* Test *)
-g `x = 1 ==> !x y. x + y = y + x`;;
-e ARITH_TAC;;
-let th = UNDISCH (top_thm());;
-fresh_thm th;;
-
-let propagate_mp rth i [th] =
-  Format.print_string "propagate_mp:\n";
-  print_thm rth; Format.print_newline();
-  print_thm (INSTANTIATE_ALL i rth); Format.print_newline();
-  MP (INSTANTIATE_ALL i rth) th;;
-
-let (MP_KTAC : thm -> ktactic) =
-  fun th ->
-    let th = fresh_thm th in
-    let avs,tm = strip_forall(concl th) in
-    let btm,htm = dest_imp tm in
-    fun mvs,(asl,w) ->
-      let mvs' = union avs mvs in
-      let inst1 = term_unify mvs' w htm in
-      let asl' = map (fun s,th -> s,INSTANTIATE inst1 th) asl in
-      let gl = asl',instantiate inst1 btm in
-      let th' = SPEC_ALL (INSTANTIATE_ALL inst1 th) in
-      (mvs',inst1),[gl],propagate_mp th';;
+(*
+UNDISCH (ARITH_RULE `x = 1 ==> !x y. x + y = y + x`);;
+fresh_thm it;;
+*)
 
 let ACCEPT_KTAC : thm_ktactic =
   let propagate_thm th i [] = INSTANTIATE_ALL i th in
@@ -141,14 +200,54 @@ let ACCEPT_KTAC : thm_ktactic =
       let insts' = term_unify mvs (concl th') w in
       ([],insts'),[],propagate_thm th';;
 
+let propagate_mp rth i [th] =
+  MP (INSTANTIATE_ALL i rth) th;;
+
+(* Instrumented version for debug. *)
+(*
+let propagate_mp rth i [th] =
+  Format.print_string "propagate_mp:\n";
+  print_thm rth; Format.print_newline();
+  print_thm (INSTANTIATE_ALL i rth); Format.print_newline();
+  MP (INSTANTIATE_ALL i rth) th;;
+*)
+
+(* The following version works, but pollutes the goal with unneeded
+   meta variables and redoundant instantiation. *)
+(*
+let (MP_KTAC : thm -> ktactic) =
+  fun th ->
+    let th = fresh_thm th in
+    let avs,tm = strip_forall(concl th) in
+    let btm,htm = dest_imp tm in
+    fun mvs,(asl,w) ->
+      let mvs' = union avs mvs in
+      let inst1 = term_unify mvs' w htm in
+      let asl' = map (fun s,th -> s,INSTANTIATE inst1 th) asl in
+      let gl = asl',instantiate inst1 btm in
+      let th' = SPEC_ALL (INSTANTIATE_ALL inst1 th) in
+      (mvs',inst1),[gl],propagate_mp th';;
+*)
+
+let (MP_KTAC : thm -> ktactic) =
+  fun th ->
+    let th = fresh_thm th in
+    let avs,tm = strip_forall(concl th) in
+    let btm,htm = dest_imp tm in
+    fun mvs,(asl,w) ->
+      let mvs' = union avs mvs in
+      let inst1 = term_unify mvs' htm w in
+      let mvs'',gl = inst_kgoal inst1 (mvs',(asl,btm)) in
+      let th' = INSTANTIATE_ALL inst1 (SPEC_ALL th) in
+      let htm' = rand(concl th') in
+      let inst = term_unify mvs w htm' in
+      (mvs'',inst),[gl],propagate_mp th';;
+
 (* ------------------------------------------------------------------------- *)
 (* Tactic composition.                                                       *)
 (* ------------------------------------------------------------------------- *)
 
 let propagate_empty (i:instantiation) ([]:thm list) : thm list = [];;
-
-let (inst_kgoal:instantiation->kgoal->kgoal) =
-  fun p (mvs,g) -> mvs,inst_goal p g;;
 
 let compose_justs
     (n:int)
@@ -161,7 +260,19 @@ let compose_justs
   (just1 i ths1)::(just2 i ths2);;
 
 (* Il valore di ritorno di seqapply e "quasi" un goalstate ma la terza
-   componente e' una justification "multipla" *)
+   componente e' una justification "multipla".
+   La terza componente e' una funzione
+     j inst (sths@oths)
+   dove sths sono le soluzione ai sottogoal del goal corrente generati
+   dalla tattica corrente, mentre le altre sono le soluzioni agli
+   altri sottogoal (ricorsivamente).
+   L'output e' dato da una lista con il primo teorema soluzione del
+   sottogoal corrente e gli altri teoremi soluzioni dei restanti
+   sottogoal.
+
+   La propagazione delle meta variabili non e' ottimale, ma la nostra
+   nuova versione di ktacsequence filtra il risultato finale.
+*)
 
 let rec seqapply (l1:ktactic list) (l2:kgoal list)
           : (term list * instantiation) * goal list *
@@ -183,12 +294,25 @@ let justsequence
     : justification =
   fun i ths -> just1 (compose_insts insts2 i) (just2 i ths);;
 
+(* Version that filters the propagated meta variables. *)
+let (ktacsequence : goalstate -> ktactic list -> goalstate) =
+  fun ((mvs1,insts1),gls1,just1) ktacl ->
+    let ((mvs2,insts2),gls2,just2) =
+      seqapply ktacl (map (fun g -> mvs1,g) gls1) in
+    let just = justsequence just1 just2 insts2 in
+    let inst = compose_insts insts1 insts2 in
+    let mvs = freesl (map (instantiate inst) (union mvs1 mvs2)) in
+    ((mvs,inst),gls2,just);;
+
+(* Version with redundant metas. *)
+(*
 let (ktacsequence : goalstate -> ktactic list -> goalstate) =
   fun ((mvs1,insts1),gls1,just1) ktacl ->
     let ((mvs2,insts2),gls2,just2) =
       seqapply ktacl (map (fun g -> mvs1,g) gls1) in
     let just = justsequence just1 just2 insts2 in
     ((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just);;
+*)
 
 let (kthenl_: ktactic -> ktactic list -> ktactic) =
   fun ktac1 ktac2l g -> ktacsequence (ktac1 g) ktac2l;;
@@ -223,8 +347,8 @@ let (ALL_KTAC:ktactic) =
 let KTRY ktac =
   korelse_ ktac ALL_KTAC;;
 
-let rec KREPEAT ktac =
-  korelse_ (kthen_ ktac (KREPEAT ktac)) ALL_KTAC;;
+let rec KREPEAT ktac g =
+  (korelse_ (kthen_ ktac (KREPEAT ktac)) ALL_KTAC) g;;
 
 let KEVERY ktacl =
   itlist kthen_ ktacl ALL_KTAC;;
@@ -261,6 +385,8 @@ let (FIRST_ASSUM_KTAC: thm_ktactic -> ktactic) =
 (* ------------------------------------------------------------------------- *)
 
 (* Con propagazione "ridotta" dell'instanziazione. *)
+(* Attenzione! Usa inst_goal invece di inst_kgoal! Come mai???? *)
+(*
 let (kby:ktactic->refinement) =
   fun ktac ((mvs,inst),gls,just) ->
     if gls = [] then failwith "No goal set" else
@@ -276,6 +402,25 @@ let (kby:ktactic->refinement) =
       let sths = subjust i cths :: oths in
       just i sths in
     (mvs',inst'),gls',just';;
+*)
+
+(* New version with correct(?) propagation of meta variables (inst_kgoal). *)
+let (kby:ktactic->refinement) =
+  fun ktac ((mvs,inst),gls,just) ->
+    if gls = [] then failwith "No goal set" else
+    let g = hd gls
+    and ogls = tl gls in
+    let ((newmvs,newinst),subgls,subjust) = ktac (mvs,g) in
+    let n = length subgls in
+    let okgls = map (curry (inst_kgoal newinst) mvs) ogls in
+    let omvs = unions (map fst okgls) in
+    let inst' = compose_insts inst newinst
+    and gls' = subgls @ map snd okgls in
+    let just' i ths =
+      let cths,oths = chop_list n ths in
+      let sths = subjust i cths :: oths in
+      just i sths in
+    (union newmvs omvs,inst'),gls',just';;
 
 let ke ktac = refine(kby ktac);;
 
@@ -297,6 +442,9 @@ set_kanren_goal
      ENTAILS
      ancestor pippo X`;;
 p();;
+(*
+ke (MP_KTAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`));;
+*)
 ke (FIRST_ASSUM_KTAC MP_KTAC);;
 ke (ktactic_of_tactic CONJ_TAC);;
 ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
@@ -413,12 +561,10 @@ ktop_thm();;
 (* ------------------------------------------------------------------------- *)
 
 let FIND_KTAC:ktactic =
-  let rec find g =
+  KREPEAT
     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                      (kthen_ (ktactic_of_tactic (REPEAT CONJ_TAC))
-                              find))) g in
-  find;;
+                      (ktactic_of_tactic (REPEAT CONJ_TAC))));;
 
 (* Pb: Introdurre una meta implicazione?! *)
 (* Questo codice assume che l'implicazione non occorra nei goal. *)
@@ -426,11 +572,9 @@ let APPLY_KTAC:thm_ktactic =
   fun th -> try MP_KTAC th with Failure _ -> ACCEPT_KTAC th;;
 
 let PROLOG_KTAC:ktactic =
-  let rec prolog g =
-    kthen_ (FIRST_ASSUM_KTAC APPLY_KTAC)
-           (kthen_ (ktactic_of_tactic (REPEAT CONJ_TAC)) prolog)
-           g in
-  prolog;;
+  KREPEAT
+    (kthen_ (FIRST_ASSUM_KTAC APPLY_KTAC)
+            (ktactic_of_tactic (REPEAT CONJ_TAC)));;
 
 set_kanren_goal
   `(!X Y Z:A. l X Y /\ q Y Z ==> q X Z) AND
@@ -439,17 +583,55 @@ set_kanren_goal
    l d e AND l a c AND l a d AND l d c AND l b c
    ENTAILS
    q a b`;;
+let cg = !current_goalstack;;
 p();;
 ke PROLOG_KTAC;;
+ktop_thm();;
+
+current_goalstack := cg; p();;
 ke FIND_KTAC;;
 ktop_thm();;
 
-(*
+current_goalstack := cg; p();;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
 ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
              (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
                      (ktactic_of_tactic (REPEAT CONJ_TAC))));;
 ktop_thm();;
-*)
+
+current_goalstack := cg; p();;
+ke (REPLICATE_KTAC 8
+     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                       (ktactic_of_tactic (REPEAT CONJ_TAC)))));;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke (KREPEAT
+     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                       (ktactic_of_tactic (REPEAT CONJ_TAC)))));;
+ktop_thm();;
 
 (* ------------------------------------------------------------------------- *)
 
