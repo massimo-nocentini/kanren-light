@@ -428,7 +428,29 @@ let (kby:ktactic->refinement) =
       just i sths in
     (union newmvs omvs,inst'),gls',just';;
 
-let ke ktac = refine(kby ktac);;
+let (KVALID:ktactic->ktactic) =
+  let fake_thm (asl,w) =
+    let asms = itlist (union o hyp o snd) asl [] in
+    mk_fthm(asms,w)
+  and false_tm = `_FALSITY_` in
+  fun ktac (mvs,(asl,w)) as kg ->
+    let ((mvs,i),gls,just as res) = ktac kg in
+    let ths = map fake_thm gls in
+    let asl',w' = dest_thm(just i ths) in
+    let asl'',w'' = inst_goal i (asl,w) in
+    let maxasms =
+      itlist (fun (_,th) -> union (insert (concl th) (hyp th))) asl'' [] in
+    if aconv w' w'' &&
+       forall (fun t -> exists (aconv t) maxasms) (subtract asl' [false_tm])
+    then res else failwith "KVALID: Invalid tactic";;
+
+let WRONG_KTAC : ktactic =
+  let wrong_propagate _ _ = REFL `1` in
+  fun _ -> null_meta,[],wrong_propagate;;
+
+let ke ktac = refine(kby(KVALID ktac));;
+
+
 
 let ktactic_of_tactic (tac:tactic) : ktactic =
   fun (mvs,g) ->
@@ -480,7 +502,7 @@ let KTAC_PROOF (gstate : goalstate) (ktac:ktactic) : instantiation * thm =
   if sgs <> [] then failwith "KTAC_PROOF: Unsolved goals" else
   inst,just inst [];;
 
-let (kprove : term * ktactic -> term list * thm) = 
+let (kprove : term * ktactic -> term list * thm) =
   let propagate_thm i [th] = INSTANTIATE_ALL i th in
   fun tm,ktac ->
     let mvs,(atms,w) = dest_kanren_goal tm in
@@ -502,6 +524,16 @@ kprove
      ENTAILS
      ancestor pippo X`,
   FIRST_ASSUM_KTAC ACCEPT_KTAC);;
+
+(*
+set_kanren_goal
+  `META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`;;
+p ();;
+ke WRONG_KTAC;;
+*)
 
 (* ------------------------------------------------------------------------- *)
 (* Example without axioms.                                                   *)
