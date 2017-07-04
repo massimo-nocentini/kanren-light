@@ -112,7 +112,7 @@ parse_as_binder "META";;
 parse_as_infix ("ENTAILS",(0,"right"));;
 parse_as_infix ("AND",(1,"right"));;
 
-let META = new_definition `(META) = (?)`;;
+let META = new_definition `(META) = (?):(A->bool)->bool`;;
 let ENTAILS = new_definition `(ENTAILS) = (==>)`;;
 let MAND = new_definition `(AND) = (/\)`;;
 
@@ -177,6 +177,18 @@ let trace_ktactic msg ktac (mvs,g) =
   print_goal g;
   Format.print_newline();
   ktac (mvs,g);;
+
+(* ------------------------------------------------------------------------- *)
+(* Tactic for reflexivity.                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let REFL_KTAC : ktactic =
+  let propagate_thm th i [] = INSTANTIATE_ALL i th in
+  fun mvs,(asl,w) ->
+    let ltm,rtm = dest_eq w in
+    let inst = term_unify mvs ltm rtm in
+    let th = REFL (instantiate inst ltm) in
+    ([],inst),[],propagate_thm th;;
 
 (* ------------------------------------------------------------------------- *)
 (* Basic tactics.                                                            *)
@@ -337,6 +349,11 @@ let (THEN),(THENL) =
 (* Fail/resume reasoning patterns.                                           *)
 (* ------------------------------------------------------------------------- *)
 
+let TAC_KTAC (tac:tactic) : ktactic =
+  fun (mvs,g) ->
+    let ((mvs',inst),gls,just) = tac g in
+    ((union mvs mvs',inst),gls,just);;
+
 let (korelse_: ktactic -> ktactic -> ktactic) =
   fun ktac1 ktac2 g ->
     try ktac1 g with Failure _ -> ktac2 g;;
@@ -450,52 +467,9 @@ let WRONG_KTAC : ktactic =
 
 let ke ktac = refine(kby(KVALID ktac));;
 
-
-
-let ktactic_of_tactic (tac:tactic) : ktactic =
-  fun (mvs,g) ->
-    let ((mvs',inst),gls,just) = tac g in
-    ((union mvs mvs',inst),gls,just);;
-
 (* ------------------------------------------------------------------------- *)
-(* Our favorite example.                                                     *)
+(* Perform refinement proof, tactic proof etc.                               *)
 (* ------------------------------------------------------------------------- *)
-
-set_kanren_goal
-  `META X:A.
-     (!X. ancestor X X) AND
-     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
-     ancestor pippo pluto AND
-     ancestor pluto paperino
-     ENTAILS
-     ancestor pippo X`;;
-p();;
-(*
-ke (MP_KTAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`));;
-*)
-ke (FIRST_ASSUM_KTAC MP_KTAC);;
-ke (ktactic_of_tactic CONJ_TAC);;
-ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
-ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
-ktop_thm();;
-
-set_kanren_goal
-  `META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`;;
-p ();;
-ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
-ktop_thm();;
-
-set_kanren_goal
-  `META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`;;
-p ();;
-ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
-ktop_thm();;
 
 let KTAC_PROOF (gstate : goalstate) (ktac:ktactic) : instantiation * thm =
   let (_,inst),sgs,just = kby ktac gstate in
@@ -518,245 +492,9 @@ let (kprove : term * ktactic -> term list * thm) =
     let eqs = map (fun v -> mk_eq(v,instantiate inst v)) mvs in
     eqs,th;;
 
-kprove
- (`META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`,
-  FIRST_ASSUM_KTAC ACCEPT_KTAC);;
-
-(*
-set_kanren_goal
-  `META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`;;
-p ();;
-ke WRONG_KTAC;;
-*)
-
-(* ------------------------------------------------------------------------- *)
-(* Example without axioms.                                                   *)
-(* ------------------------------------------------------------------------- *)
-
-(*
-needs "Library/rstc.ml";;
-
-let PARENT_RULES,PARENT_INDUCT,PARENT_CASES = new_inductive_definition
-  `PARENT 3 1 /\
-   PARENT 42 3`;;
-
-let PARENT_1,PARENT_2 = CONJ_PAIR PARENT_RULES;;
-
-set_kanren_goal
-  `META X:num. RTC PARENT 42 X`;;
-ke(MP_KTAC (ISPEC `PARENT` RTC_TRANS));;
-ke (ktactic_of_tactic CONJ_TAC);;
-ke (MP_KTAC (ISPEC `PARENT` RTC_INC));;
-ke (ACCEPT_KTAC PARENT_2);;
-ke (MP_KTAC (ISPEC `PARENT` RTC_INC));;
-ke (ACCEPT_KTAC PARENT_1);;
-top_thm();;
-*)
-
-
-(* ------------------------------------------------------------------------- *)
-
-set_kanren_goal
-  `META X:A.
-     (!X. ancestor X X) AND
-     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
-     ancestor pippo pluto AND
-     ancestor pluto paperino
-     ENTAILS
-     ancestor pippo X`;;
-let cg = !current_goalstack;;
-p();;
-
-(* 0 : funziona! *)
-ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (ktactic_of_tactic CONJ_TAC));;
-ke (trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
-ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
-ktop_thm();;
-
-(* 1 : funziona! *)
-current_goalstack := cg; p();;
-ke (kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                    (ktactic_of_tactic CONJ_TAC))
-           (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
-ktop_thm();;
-
-kprove
- (`META X:A.
-     (!X. ancestor X X) AND
-     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
-     ancestor pippo pluto AND
-     ancestor pluto paperino
-     ENTAILS
-     ancestor pippo X`,
-  kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                 (ktactic_of_tactic CONJ_TAC))
-         (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
-
-(* 2 : error tryfind *)
-current_goalstack := cg; p();;
-ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-           (kthen_ (ktactic_of_tactic CONJ_TAC)
-                   (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
-ktop_thm();;
-
-(* 3 : error tryfind *)
-current_goalstack := cg; p();;
-ke (trace_ktactic "1" (FIRST_ASSUM_KTAC MP_KTAC));;
-ke (kthen_ (trace_ktactic "2" (ktactic_of_tactic CONJ_TAC))
-           (trace_ktactic "3" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
-ktop_thm();;
-
-(* 4 : funziona! *)
-current_goalstack := cg; p();;
-ke (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                    (ktactic_of_tactic CONJ_TAC))
-            [FIRST_ASSUM_KTAC ACCEPT_KTAC;
-             FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
-ktop_thm();;
-
-(* ------------------------------------------------------------------------- *)
-
-let FIND_KTAC:ktactic =
-  KREPEAT
-    (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-              (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                      (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-
-(* Pb: Introdurre una meta implicazione?! *)
-(* Questo codice assume che l'implicazione non occorra nei goal. *)
-let APPLY_KTAC:thm_ktactic =
-  fun th -> try MP_KTAC th with Failure _ -> ACCEPT_KTAC th;;
-
-let PROLOG_KTAC:ktactic =
-  KREPEAT
-    (kthen_ (FIRST_ASSUM_KTAC APPLY_KTAC)
-            (ktactic_of_tactic (REPEAT CONJ_TAC)));;
-
-set_kanren_goal
-  `(!X Y Z:A. l X Y /\ q Y Z ==> q X Z) AND
-   (!X:A. q X X) AND
-   (!X Y. l X Y ==> l Y X) AND
-   l d e AND l a c AND l a d AND l d c AND l b c
-   ENTAILS
-   q a b`;;
-let cg = !current_goalstack;;
-p();;
-ke PROLOG_KTAC;;
-ktop_thm();;
-
-current_goalstack := cg; p();;
-ke FIND_KTAC;;
-ktop_thm();;
-
-current_goalstack := cg; p();;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                     (ktactic_of_tactic (REPEAT CONJ_TAC))));;
-ktop_thm();;
-
-current_goalstack := cg; p();;
-ke (REPLICATE_KTAC 8
-     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                       (ktactic_of_tactic (REPEAT CONJ_TAC)))));;
-ktop_thm();;
-
-current_goalstack := cg; p();;
-ke (KREPEAT
-     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
-               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                       (ktactic_of_tactic (REPEAT CONJ_TAC)))));;
-ktop_thm();;
-
 (* ------------------------------------------------------------------------- *)
 
 (*;;
 META_SPEC_TAC
 X_META_EXISTS_TAC
 *)
-
-(* ------------------------------------------------------------------------- *)
-(* Tactic for reflexivity.                                                   *)
-(* ------------------------------------------------------------------------- *)
-
-let REFL_KTAC : ktactic =
-  let propagate_thm th i [] = INSTANTIATE_ALL i th in
-  fun mvs,(asl,w) ->
-    let ltm,rtm = dest_eq w in
-    let inst = term_unify mvs ltm rtm in
-    let th = REFL (instantiate inst ltm) in
-    ([],inst),[],propagate_thm th;;
-
-(* Example 1 *)
-set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;
-p();;
-ke REFL_KTAC;;
-ktop_thm();;
-
-(* Example 2 *)
-set_kanren_goal `META A B C. [A;C;2] = [0;A;B]`;;
-p();;
-ke REFL_KTAC;;
-ktop_thm();;
-
-(* ------------------------------------------------------------------------- *)
-(* Experiment with lists.                                                    *)
-(* ------------------------------------------------------------------------- *)
-
-let APPEND_CONS = prove
- (`!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs`,
-  REWRITE_TAC[APPEND; CONS_11]);;
-
-let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
-let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
-
-(* Example 1 *)
-set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
-p();;
-ke (KREPEAT (MP_KTAC NUM_APPEND_CONS));;
-ke (ACCEPT_KTAC NUM_APPEND_NIL);;
-ktop_thm();;
-
-kprove
- (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
-  kthen_ (KREPEAT (MP_KTAC NUM_APPEND_CONS))
-         (ACCEPT_KTAC NUM_APPEND_NIL));;
-
-(* Example 2 *)
-set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
-p();;
-e (REWRITE_TAC[APPEND]);;
-ke REFL_KTAC;;
-ktop_thm();;
-
-kprove
- (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
-  kthen_ (ktactic_of_tactic (REWRITE_TAC[APPEND]))
-         REFL_KTAC);;

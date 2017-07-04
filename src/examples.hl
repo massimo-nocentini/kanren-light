@@ -1,0 +1,238 @@
+(* ------------------------------------------------------------------------- *)
+(* Experiments with REFL_KTAC.                                               *)
+(* ------------------------------------------------------------------------- *)
+
+(* Example 1 *)
+set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;
+p();;
+ke REFL_KTAC;;
+ktop_thm();;
+
+(* Example 2 *)
+set_kanren_goal `META A B C. [A;C;2] = [0;A;B]`;;
+p();;
+ke REFL_KTAC;;
+ktop_thm();;
+
+(* ------------------------------------------------------------------------- *)
+(* How to break the invariant!                                               *)
+(* ------------------------------------------------------------------------- *)
+
+(*
+set_kanren_goal
+  `META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`;;
+p ();;
+ke WRONG_KTAC;;
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Our favorite example: angestor and all that...                            *)
+(* ------------------------------------------------------------------------- *)
+
+set_kanren_goal
+  `META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`;;
+p ();;
+ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
+ktop_thm();;
+
+set_kanren_goal
+  `META X:A.
+     (!X. ancestor X X) AND
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`;;
+let cg = !current_goalstack;;
+p();;
+
+(* -1 : funziona! *)
+ke (MP_KTAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`));;
+
+(* 0 : funziona! *)
+current_goalstack := cg; p();;
+ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC));;
+ke (trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
+ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
+ktop_thm();;
+
+(* 1 : funziona! *)
+current_goalstack := cg; p();;
+ke (kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                    (TAC_KTAC CONJ_TAC))
+           (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+ktop_thm();;
+
+kprove
+ (`META X:A.
+     (!X. ancestor X X) AND
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                 (TAC_KTAC CONJ_TAC))
+         (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+
+(* 2 : error tryfind *)
+current_goalstack := cg; p();;
+ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+           (kthen_ (TAC_KTAC CONJ_TAC)
+                   (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+ktop_thm();;
+
+(* 3 : error tryfind *)
+current_goalstack := cg; p();;
+ke (trace_ktactic "1" (FIRST_ASSUM_KTAC MP_KTAC));;
+ke (kthen_ (trace_ktactic "2" (TAC_KTAC CONJ_TAC))
+           (trace_ktactic "3" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+ktop_thm();;
+
+(* 4 : funziona! *)
+current_goalstack := cg; p();;
+ke (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                    (TAC_KTAC CONJ_TAC))
+            [FIRST_ASSUM_KTAC ACCEPT_KTAC;
+             FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
+ktop_thm();;
+
+(* ------------------------------------------------------------------------- *)
+
+let FIND_KTAC:ktactic =
+  KREPEAT
+    (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+              (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                      (TAC_KTAC (REPEAT CONJ_TAC))));;
+
+(* Pb: Introdurre una meta implicazione?! *)
+(* Questo codice assume che l'implicazione non occorra nei goal. *)
+let APPLY_KTAC:thm_ktactic =
+  fun th -> try MP_KTAC th with Failure _ -> ACCEPT_KTAC th;;
+
+let PROLOG_KTAC:ktactic =
+  KREPEAT
+    (kthen_ (FIRST_ASSUM_KTAC APPLY_KTAC)
+            (TAC_KTAC (REPEAT CONJ_TAC)));;
+
+set_kanren_goal
+  `(!X Y Z:A. l X Y /\ q Y Z ==> q X Z) AND
+   (!X:A. q X X) AND
+   (!X Y. l X Y ==> l Y X) AND
+   l d e AND l a c AND l a d AND l d c AND l b c
+   ENTAILS
+   q a b`;;
+let cg = !current_goalstack;;
+p();;
+ke PROLOG_KTAC;;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke FIND_KTAC;;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ke (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+             (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC (REPEAT CONJ_TAC))));;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke (REPLICATE_KTAC 8
+     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                       (TAC_KTAC (REPEAT CONJ_TAC)))));;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke (KREPEAT
+     (korelse_ (FIRST_ASSUM_KTAC ACCEPT_KTAC)
+               (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                       (TAC_KTAC (REPEAT CONJ_TAC)))));;
+ktop_thm();;
+
+(* ------------------------------------------------------------------------- *)
+(* Example without axioms.                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+(*
+needs "Library/rstc.ml";;
+
+let PARENT_RULES,PARENT_INDUCT,PARENT_CASES = new_inductive_definition
+  `PARENT 3 1 /\
+   PARENT 42 3`;;
+
+let PARENT_1,PARENT_2 = CONJ_PAIR PARENT_RULES;;
+
+set_kanren_goal
+  `META X:num. RTC PARENT 42 X`;;
+ke(MP_KTAC (ISPEC `PARENT` RTC_TRANS));;
+ke (TAC_KTAC CONJ_TAC);;
+ke (MP_KTAC (ISPEC `PARENT` RTC_INC));;
+ke (ACCEPT_KTAC PARENT_2);;
+ke (MP_KTAC (ISPEC `PARENT` RTC_INC));;
+ke (ACCEPT_KTAC PARENT_1);;
+top_thm();;
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Experiment with lists.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let APPEND_CONS = prove
+ (`!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs`,
+  REWRITE_TAC[APPEND; CONS_11]);;
+
+let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
+let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
+
+(* Example 1 *)
+set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
+p();;
+ke (KREPEAT (MP_KTAC NUM_APPEND_CONS));;
+ke (ACCEPT_KTAC NUM_APPEND_NIL);;
+ktop_thm();;
+
+kprove
+ (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
+  kthen_ (KREPEAT (MP_KTAC NUM_APPEND_CONS))
+         (ACCEPT_KTAC NUM_APPEND_NIL));;
+
+(* Example 2 *)
+set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
+p();;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+ktop_thm();;
+
+kprove
+ (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
+  kthen_ (TAC_KTAC (REWRITE_TAC[APPEND]))
+         REFL_KTAC);;

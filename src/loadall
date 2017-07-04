@@ -1,0 +1,22 @@
+#!/bin/sh
+
+function go ()
+{
+   ./runhol 2>&1 | tee output
+}
+
+go <<EOF
+loadt "make.hl";;
+print_endline "No more Errors\n";;
+print_endline "No more Warnings\n";;
+print_endline "All done.";;
+exit 0;;
+EOF
+
+echo "----------------------------------------------------------------------"
+echo " Warnings/Errors/Exceptions"
+echo "----------------------------------------------------------------------"
+
+grep -v "^Warning 8: this pattern-matching is not exhaustive.$" output |
+  grep --color "\\b\\(Warning\\|Error\\|Exception\\)s\\?\\b"
+echo "All done."

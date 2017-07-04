@@ -1,0 +1,19 @@
+#!/bin/sh
+
+TMPDIR="/tmp"
+
+HOL_RESTART=$(mktemp "$TMPDIR/hol_cwd_command.XXXX")
+echo "let () = Sys.chdir \"$(pwd)\";;" > $HOL_RESTART
+
+cat >> $HOL_RESTART <<EOF
+load_path :=
+  let cwd = Sys.getcwd() in
+  let parent_dir = Filename.dirname cwd in
+  parent_dir :: !load_path;;
+EOF
+
+# Do not catch Ctrl-C (pass it down to HOL Light)
+trap "" SIGINT
+
+cat $HOL_RESTART - | hol_light_core
+rm -f $HOL_RESTART
