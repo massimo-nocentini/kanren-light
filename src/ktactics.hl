@@ -371,13 +371,17 @@ let KTRY ktac =
   korelse_ ktac ALL_KTAC;;
 
 let rec KREPEAT ktac g =
-  (korelse_ (kthen_ ktac (KREPEAT ktac)) ALL_KTAC) g;;
+  (korelse_ (fun g -> kthen_ ktac (KREPEAT ktac) g) (fun g -> ALL_KTAC g)) g;;
+
+let rec DEBUG_KREPEAT s ktac g =
+  s := g :: !s;
+  (korelse_ (kthen_ ktac (DEBUG_KREPEAT s ktac)) ALL_KTAC) g;;
 
 let KEVERY ktacl =
-  itlist kthen_ ktacl ALL_KTAC;;
+  itlist (fun t1 t2 -> kthen_ t1 t2) ktacl ALL_KTAC;;
 
 let (KFIRST: ktactic list -> ktactic) =
-  end_itlist korelse_;;
+  fun ktacl g -> end_itlist (fun t1 t2 -> korelse_ t1 t2) ktacl g;;
 
 let MAP_KEVERY ktacf lst =
   KEVERY (mapfilter ktacf lst);;
@@ -385,10 +389,11 @@ let MAP_KEVERY ktacf lst =
 let MAP_KFIRST ktacf lst =
   KFIRST (mapfilter ktacf lst);;
 
+(* TODO: controllare le meta!!!! *)
 let (CHANGED_KTAC: ktactic -> ktactic) =
   fun ktac (mvs,g) as gs ->
     let (meta,gl,_ as gstate) = ktac gs in
-    if meta = null_meta && length gl = 1 && hd gl = g
+    if length gl = 1 && hd gl = g
     then failwith "CHANGED_KTAC" else gstate;;
 
 let rec REPLICATE_KTAC n ktac =

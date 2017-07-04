@@ -1,0 +1,322 @@
+(* ========================================================================= *)
+(* Examples with list of numbers.                                            *)
+(* ========================================================================= *)
+
+needs "Permutation/make.ml";;
+
+let CHEAT_KTAC = TAC_KTAC CHEAT_TAC;;
+
+(* ------------------------------------------------------------------------- *)
+(* Append.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let APPEND_CONS = prove
+ (`!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs`,
+  REWRITE_TAC[APPEND; CONS_11]);;
+
+let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
+let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
+
+(* ------------------------------------------------------------------------- *)
+(* Filter.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let FILTER_HORN = prove
+ (`(!P:A->bool. FILTER P [] = []) /\
+   (!P x:A xs ys. P x /\ FILTER P xs = ys ==> FILTER P (CONS x xs) = CONS x ys) /\
+   (!P x:A xs ys. ~P x /\ FILTER P xs = ys ==> FILTER P (CONS x xs) = ys)`,
+  REWRITE_TAC[FILTER] THEN REPEAT STRIP_TAC THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]);;
+
+let NUM_FILTER_HORN = INST_TYPE [`:num`,aty] FILTER_HORN;;
+
+let [NUM_FILTER_NIL; NUM_FILTER_LE_HORN; NUM_FILTER_GT_HORN] =
+  CONJUNCTS NUM_FILTER_HORN;;
+
+(* ------------------------------------------------------------------------- *)
+(* Sort.                                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+let SORT = new_definition
+  `SORT le xs ys <=> xs:A list PERMUTED ys /\ ORDERED le ys`;;
+
+let SORT_NIL = prove
+ (`SORT (le:A->A->bool) [] []`,
+  REWRITE_TAC[SORT; PERMUTED_RULES; ORDERED_RULES]);;
+
+let QUICKSORT_CONS = prove
+ (`!x:A xs ys xs1 xs2 ys1 ys2.
+     FILTER (\y. le y x) xs = xs1 /\
+     SORT le xs1 ys1 /\
+     FILTER (\y. ~le y x) xs = xs2 /\
+     SORT le xs2 ys2 /\
+     APPEND ys1 (CONS x ys2) = ys
+     ==> SORT le (CONS x xs) ys`,
+  CHEAT_TAC);;
+
+let NUM_SORT_NIL =
+  INST [`(<=)`,`le:num->num->bool`] (INST_TYPE [`:num`,aty] SORT_NIL);;
+let NUM_QUICKSORT_CONS =
+  INST [`(<=)`,`le:num->num->bool`] (INST_TYPE [`:num`,aty] QUICKSORT_CONS);;
+
+let CHECK_TAC : tactic =
+  function
+      (_,Const("F",_)) -> failwith "CHECK_TAC"
+    | g -> ALL_TAC g;;
+
+let CONV_KTAC : conv -> ktactic =
+  fun conv g ->
+    try (TAC_KTAC (CONV_TAC conv THEN CHECK_TAC)) g
+    with Failure _ ->
+      print_kgoal g;
+      failwith "CONV_KTAC";;
+
+(* ------------------------------------------------------------------------- *)
+
+let s = ref [];;
+
+
+set_kanren_goal `META ys. SORT (<=) [2;1;0] ys`; p();;
+set_kanren_goal `META ys. SORT (<=) [6;5;4;3;2;1;0] ys`; p();;
+set_kanren_goal `META ys. SORT (<=) [0;1;2;3;4;5;6] ys`; p();;
+set_kanren_goal `META ys. SORT (<=) [3;2;5;7;1;7;1;5] ys`; p();;
+ke (kthen_ (MP_KTAC NUM_QUICKSORT_CONS) (TAC_KTAC (REPEAT CONJ_TAC)));;
+
+(*
+ke (MP_KTAC NUM_FILTER_LE_HORN);;
+ke (MP_KTAC NUM_FILTER_GT_HORN);;
+ke (CONV_KTAC NUM_REDUCE_CONV);;
+ke (MP_KTAC NUM_FILTER_GT_HORN);;
+NUM_FILTER_LE_HORN;;
+NUM_FILTER_GT_HORN;;
+(map dest_var o variables o concl) it;;
+*)
+
+ke (MP_KTAC NUM_FILTER_LE_HORN);;
+ke (TAC_KTAC BETA_TAC);;
+ke (CONV_KTAC NUM_REDUCE_CONV);;
+
+ke (MP_KTAC NUM_FILTER_LE_HORN);;
+ke (TAC_KTAC BETA_TAC);;
+ke (CONV_KTAC NUM_REDUCE_CONV);;
+
+ke (MP_KTAC NUM_FILTER_GT_HORN);;
+ke (TAC_KTAC BETA_TAC);;
+ke (CONV_KTAC NUM_REDUCE_CONV);;
+
+
+e (CONV_TAC NUM_REDUCE_CONV);;
+
+(* ------------------------------------------------------------------------- *)
+
+let devil_ktac =
+  (korelse_
+     (fun g -> ACCEPT_KTAC NUM_FILTER_NIL g)
+     (fun g -> korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV)) g));;
+
+s := [];;
+ke (KREPEAT devil_ktac);;
+ke (kthen_ (MP_KTAC NUM_QUICKSORT_CONS) (TAC_KTAC (REPEAT CONJ_TAC)));;
+ke (KREPEAT devil_ktac);;
+ke (kthen_ (MP_KTAC NUM_QUICKSORT_CONS) (TAC_KTAC (REPEAT CONJ_TAC)));;
+ke (KREPEAT devil_ktac);;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+ke (KREPEAT devil_ktac);;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+ke (KREPEAT devil_ktac);;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+ke (KREPEAT devil_ktac);;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+
+current_goalstack := [last !current_goalstack]; p();;
+ke (KREPEAT
+      (korelse_ (fun g -> ACCEPT_KTAC NUM_SORT_NIL g)
+      (fun g -> 
+      (korelse_ (fun g -> korelse_ (fun g -> CHANGED_KTAC (KREPEAT devil_ktac) g)
+                         (fun g -> kthen_ (MP_KTAC NUM_QUICKSORT_CONS)
+                                          (TAC_KTAC (REPEAT CONJ_TAC))
+                                          g)
+                         g)
+      (fun g -> kthen_ (TAC_KTAC (REWRITE_TAC[APPEND]))
+                                 REFL_KTAC
+                                 g))
+            g)));;
+ktop_thm();;
+
+
+ke (REWRITE_KTAC
+      (korelse_ (fun g ->  g)
+      (fun g -> korelse_
+
+      (fun g ->  g)
+      (fun g -> KREPEAT devil_ktac g) g)));;
+
+
+Format.print_string "--------------------------------------------------";;
+Format.print_newline();;
+map print_kgoal !s;;
+
+let gs = hd (!s);;
+
+(kthen_ devil_ktac (KREPEAT devil_ktac)) gs;;
+print_kgoal gs;;
+devil_ktac gs;;
+
+kprove(`META ys. SORT (<=) [2;1;0] ys`,
+  KREPEAT
+      (korelse_ (fun g -> ACCEPT_KTAC NUM_SORT_NIL g)
+      (fun g -> 
+      (korelse_ (fun g -> korelse_ (fun g -> CHANGED_KTAC (KREPEAT devil_ktac) g)
+                         (fun g -> kthen_ (MP_KTAC NUM_QUICKSORT_CONS)
+                                          (TAC_KTAC (REPEAT CONJ_TAC))
+                                          g)
+                         g)
+      (fun g -> kthen_ (TAC_KTAC (REWRITE_TAC[APPEND]))
+                                 REFL_KTAC
+                                 g))
+            g)));;
+
+
+(* ------------------------------------------------------------------------- *)
+(* Dimostrazione completa passo-passo.                                       *)
+(* ------------------------------------------------------------------------- *)
+
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (kthen_ (MP_KTAC NUM_QUICKSORT_CONS) (TAC_KTAC (REPEAT CONJ_TAC)));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (kthen_ (MP_KTAC NUM_QUICKSORT_CONS) (TAC_KTAC (REPEAT CONJ_TAC)));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (kthen_ (MP_KTAC NUM_QUICKSORT_CONS) (TAC_KTAC (REPEAT CONJ_TAC)));;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+ke (korelse_
+     (ACCEPT_KTAC NUM_FILTER_NIL)
+     (korelse_
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_LE_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))
+      (kthen_ (kthen_ (MP_KTAC NUM_FILTER_GT_HORN) (TAC_KTAC BETA_TAC))
+              (CONV_KTAC NUM_REDUCE_CONV))));;
+ke (ACCEPT_KTAC NUM_SORT_NIL);;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+e (REWRITE_TAC[APPEND]);;
+ke REFL_KTAC;;
+ktop_thm();;
