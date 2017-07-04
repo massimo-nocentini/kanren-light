@@ -3,6 +3,21 @@
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
+(* Generalized, Kanren-like tactics.                                         *)
+(* ------------------------------------------------------------------------- *)
+
+type kgoal = term list* goal;;
+
+type ktactic = kgoal -> goalstate;;
+
+type thm_ktactic = thm -> ktactic;;
+
+let (inst_kgoal:instantiation->kgoal->kgoal) =
+  fun p (mvs,g) ->
+    let mvs' = intersect mvs (freesl (map (instantiate p) mvs)) in
+    mvs',inst_goal p g;;
+
+(* ------------------------------------------------------------------------- *)
 (* Modify the original printer for goals and goalstacs to print              *)
 (* metavariables.                                                            *)
 (* ------------------------------------------------------------------------- *)
@@ -79,9 +94,15 @@ let (print_goalstack:goalstack->unit) =
 (* top_thm done right!                                                       *)
 (* ------------------------------------------------------------------------- *)
 
-let ktop_thm() =
+let fix_top_thm() =
   let ((_,inst),[],f)::_ = !current_goalstack in
   f inst [];;
+
+let ktop_thm() =
+  match !current_goalstack with
+    [] -> failwith "ktop_thm: empty goalstack"
+  | ((_,inst),[],f)::_ -> f inst []
+  | _ -> failwith "ktop_thm: proof not finished";;
 
 (* ------------------------------------------------------------------------- *)
 (* Meta goals.                                                               *)
@@ -128,21 +149,6 @@ let set_kanren_goal =
     let mvars,(tml,w) = dest_kanren_goal tm in
     let asl = map (fun th -> "",ASSUME th) tml in
     current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];;
-
-(* ------------------------------------------------------------------------- *)
-(* Generalized, Kanren-like tactics.                                         *)
-(* ------------------------------------------------------------------------- *)
-
-type kgoal = term list* goal;;
-
-type ktactic = kgoal -> goalstate;;
-
-type thm_ktactic = thm -> ktactic;;
-
-let (inst_kgoal:instantiation->kgoal->kgoal) =
-  fun p (mvs,g) ->
-    let mvs' = intersect mvs (freesl (map (instantiate p) mvs)) in
-    mvs',inst_goal p g;;
 
 (* ------------------------------------------------------------------------- *)
 (* Debug tools.                                                              *)
@@ -469,21 +475,33 @@ p ();;
 ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
 
-(*
-let (KTAC_PROOF : kgoal * ktactic -> thm) =
-  fun (g,tac) ->
-    let gstate = mk_kgoalstate g in
-    let _,sgs,just = kby tac gstate in
-    if sgs = [] then just null_inst []
-    else failwith "KTAC_PROOF: Unsolved goals";;
+let KTAC_PROOF (gstate : goalstate) (ktac:ktactic) : instantiation * thm =
+  let (_,inst),sgs,just = kby ktac gstate in
+  if sgs <> [] then failwith "KTAC_PROOF: Unsolved goals" else
+  inst,just inst [];;
 
-let kprove(t,ktac) =
-  let th = KTAC_PROOF(([],t),ktac) in
-  let t' = concl th in
-  if t' = t then th else
-  try EQ_MP (ALPHA t' t) th
-  with Failure _ -> failwith "kprove: justification generated wrong theorem";;
-*)
+let (kprove : term * ktactic -> term list * thm) = 
+  let propagate_thm i [th] = INSTANTIATE_ALL i th in
+  fun tm,ktac ->
+    let mvs,(atms,w) = dest_kanren_goal tm in
+    let asl = map (fun tm -> "",ASSUME tm) atms in
+    let gstate = (mvs,null_inst),[asl,w],propagate_thm in
+    let inst,th = KTAC_PROOF gstate ktac in
+    let th =
+      let t' = concl th in
+      if t' = w then th else
+      try EQ_MP (ALPHA t' (instantiate inst w)) th
+      with Failure _ ->
+        failwith "kprove: tactic generated wrong theorem" in
+    let eqs = map (fun v -> mk_eq(v,instantiate inst v)) mvs in
+    eqs,th;;
+
+kprove
+ (`META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`,
+  FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 
 (* ------------------------------------------------------------------------- *)
 (* Example without axioms.                                                   *)
@@ -535,6 +553,18 @@ ke (kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
                     (ktactic_of_tactic CONJ_TAC))
            (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
 ktop_thm();;
+
+kprove
+ (`META X:A.
+     (!X. ancestor X X) AND
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                 (ktactic_of_tactic CONJ_TAC))
+         (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
 
 (* 2 : error tryfind *)
 current_goalstack := cg; p();;
@@ -673,6 +703,7 @@ let APPEND_CONS = prove
   REWRITE_TAC[APPEND; CONS_11]);;
 
 let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
+let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
 
 (* Example 1 *)
 set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
@@ -681,6 +712,11 @@ ke (KREPEAT (MP_KTAC NUM_APPEND_CONS));;
 ke (ACCEPT_KTAC NUM_APPEND_NIL);;
 ktop_thm();;
 
+kprove
+ (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
+  kthen_ (KREPEAT (MP_KTAC NUM_APPEND_CONS))
+         (ACCEPT_KTAC NUM_APPEND_NIL));;
+
 (* Example 2 *)
 set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
 p();;
@@ -688,3 +724,7 @@ e (REWRITE_TAC[APPEND]);;
 ke REFL_KTAC;;
 ktop_thm();;
 
+kprove
+ (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
+  kthen_ (ktactic_of_tactic (REWRITE_TAC[APPEND]))
+         REFL_KTAC);;
