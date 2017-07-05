@@ -130,8 +130,12 @@ set_kanren_goal
    q a b`;;
 let cg = !current_goalstack;;
 p();;
+
+(* Loop!! *)
+(*
 ke PROLOG_KTAC;;
 ktop_thm();;
+*)
 
 current_goalstack := cg; p();;
 ke FIND_KTAC;;
@@ -201,38 +205,3 @@ ke (MP_KTAC (ISPEC `PARENT` RTC_INC));;
 ke (ACCEPT_KTAC PARENT_1);;
 top_thm();;
 *)
-
-(* ------------------------------------------------------------------------- *)
-(* Experiment with lists.                                                    *)
-(* ------------------------------------------------------------------------- *)
-
-let APPEND_CONS = prove
- (`!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs`,
-  REWRITE_TAC[APPEND; CONS_11]);;
-
-let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
-let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
-
-(* Example 1 *)
-set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
-p();;
-ke (KREPEAT (MP_KTAC NUM_APPEND_CONS));;
-ke (ACCEPT_KTAC NUM_APPEND_NIL);;
-ktop_thm();;
-
-kprove
- (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
-  kthen_ (KREPEAT (MP_KTAC NUM_APPEND_CONS))
-         (ACCEPT_KTAC NUM_APPEND_NIL));;
-
-(* Example 2 *)
-set_kanren_goal `META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`;;
-p();;
-e (REWRITE_TAC[APPEND]);;
-ke REFL_KTAC;;
-ktop_thm();;
-
-kprove
- (`META a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`,
-  kthen_ (TAC_KTAC (REWRITE_TAC[APPEND]))
-         REFL_KTAC);;
