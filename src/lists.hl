@@ -111,3 +111,103 @@ kprove(`META x w. SORT (<=) [4;3;2;1] [x;2;3;w]`, QUICKSORT_KTAC);;
 kprove(`META x w. SORT (<=) [4;3;2;1] [x;2;1;w]`, QUICKSORT_KTAC);;
 kprove(`META ys. SORT (<=) (APPEND [1; 2] ys) [1;2;3;4;5]`, QUICKSORT_KTAC);;
 *)
+
+(* ------------------------------------------------------------------------- *)
+(* Reverse.                                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let NUM_REVERSE_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 REVERSE);;
+
+let REVERSE_HORN = prove
+ (`!x:A xs ys zs. REVERSE xs = ys /\ APPEND ys [x] = zs
+                  ==> REVERSE (CONS x xs) = zs`,
+  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
+
+let REVERSE_MIXED_HORN = prove
+ (`!x:A xs ys. REVERSE xs = ys ==> REVERSE (CONS x xs) = APPEND ys [x]`,
+  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
+
+let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
+let NUM_REVERSE_MIXED_HORN = INST_TYPE [`:num`,aty] REVERSE_MIXED_HORN;;
+
+let PURE_REVERSE_KTAC : ktactic =
+  let rec reverse_ktac g =
+    korelse_ (ACCEPT_KTAC NUM_REVERSE_NIL)
+             (kthen_ (MP_KTAC NUM_REVERSE_MIXED_HORN)
+                     reverse_ktac)
+             g in
+  reverse_ktac;;
+
+let REVERSE_KTAC : ktactic =
+  let rec reverse_ktac g =
+    korelse_ (ACCEPT_KTAC NUM_REVERSE_NIL)
+             (kthen_ (MP_KTAC NUM_REVERSE_HORN)
+                     (kthenl_ (TAC_KTAC CONJ_TAC)
+                              [reverse_ktac;
+                               kthen_ (TAC_KTAC (REWRITE_TAC[APPEND]))
+                                      REFL_KTAC]))
+             g in
+  reverse_ktac;;
+
+(* Attenzione: Il rewrite non ha effetto! *)
+let REVERSE_MIXED_KTAC : ktactic =
+  let rec reverse_ktac g =
+    korelse_ (kthen_ (MP_KTAC NUM_REVERSE_MIXED_HORN)
+                     reverse_ktac)
+             (kthen_ (kthen_ (TAC_KTAC (REWRITE_TAC[APPEND])) REFL_KTAC)
+                     (ACCEPT_KTAC NUM_REVERSE_NIL))
+             g in
+  reverse_ktac;;
+
+kprove(`META ys. REVERSE [1;2;3] = ys`, REFL_KTAC);;
+kprove(`META ys. REVERSE [1;2;3] = ys`, REVERSE_KTAC);;
+kprove(`META ys. REVERSE [1;2;3] = ys`, PURE_REVERSE_KTAC);;
+kprove(`META ys. REVERSE [1;2;3] = ys`, REVERSE_MIXED_KTAC);;
+
+(* ------------------------------------------------------------------------- *)
+(* Lenght.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let CONJ_KTAC : ktactic = TAC_KTAC CONJ_TAC;;
+let NUM_REDUCE_KTAC : ktactic = TAC_KTAC NUM_REDUCE_TAC;;
+
+let CONJ_MP_KTAC : thm_ktactic =
+  fun th -> kthen_ (MP_KTAC th) (TAC_KTAC (REPEAT CONJ_TAC));;
+
+let NUM_LENGHT_HORN = prove
+ (`LENGTH ([]:num list) = 0 /\
+  (!h:num t n m. LENGTH t = m /\ n = SUC m ==> LENGTH (CONS h t) = n)`,
+  REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
+
+let NUM_LENGHT_NIL, NUM_LENGHT_CONS_HORN = CONJ_PAIR NUM_LENGHT_HORN;;
+
+let LENGTH_KTAC : ktactic =
+  let rec length_ktac g =
+    korelse_ (ACCEPT_KTAC NUM_LENGHT_NIL)
+             (kthenl_ (CONJ_MP_KTAC NUM_LENGHT_CONS_HORN)
+                      [length_ktac;
+                       kthen_ NUM_REDUCE_KTAC
+                              REFL_KTAC])
+             g in
+  length_ktac;;
+
+set_kanren_goal `META n. LENGTH [1;2;3] = n`; p();;
+ke LENGTH_KTAC;;
+ktop_thm();;
+
+kprove(`META n. LENGTH [1;2;3] = n`, LENGTH_KTAC);;
+kprove(`META x:num xs. LENGTH (CONS x xs) = 1`, LENGTH_KTAC);;
+kprove(`META xs:num list. LENGTH xs = 1`, LENGTH_KTAC);;
+
+(* Do not work!  Our kthenl_ do not perform backtracking from one branch
+   to the previous ones. *)
+(*
+kprove(`META xs:num list. LENGTH xs = SUC (SUC 0)`, LENGTH_KTAC);;
+
+set_kanren_goal `META xs:num list. LENGTH xs = SUC (SUC 0)`; p();;
+ke (CONJ_MP_KTAC NUM_LENGHT_CONS_HORN);;
+ke (ACCEPT_KTAC NUM_LENGHT_NIL);;
+ke (kthen_ NUM_REDUCE_KTAC REFL_KTAC);;
+ke (kthen_ (KTRY (CONV_KTAC (RAND_CONV NUM_SUC_CONV))) REFL_KTAC);;
+ktop_thm();;
+*)
