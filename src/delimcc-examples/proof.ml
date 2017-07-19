@@ -6,17 +6,17 @@
 (* ------------------------------------------------------------------------ *)
 let main_prompt : 'a Delimcc.prompt = Delimcc.new_prompt () ;;
 let reset = fun thunk -> Delimcc.push_prompt main_prompt thunk 
-and shift : ((unit -> int visit) -> int visit) -> unit = 
+and shift : ((unit -> 'a visit) -> 'a visit) -> unit = 
     fun rcv -> Delimcc.shift main_prompt rcv ;;
 
-let yield (n : int) = shift (fun (k : unit -> int visit) -> Next (n, k)) ;;
+let yield (n : 'a) = shift (fun (k : unit -> 'a visit) -> Next (n, k)) ;;
 
-let run (walk : 'a -> unit) (tree : 'a) : 'b visit = 
-    reset (fun () -> walk tree; Done);;
+let run (walk : 'a -> 'b) (x : 'a) : 'b visit = 
+    reset (fun () -> walk x; Done);;
 
-let rec nur (s : 'a visit) : unit =
+let rec nur (s : 'a visit) : 'a =
     match s with
-    | Done -> ()
+    | Done -> failwith "no more solutions"
     | Next (n, k) -> yield n; nur (k ()) 
 ;;
 
