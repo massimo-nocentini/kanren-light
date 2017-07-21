@@ -145,9 +145,7 @@ let () = delimited_control (fun reset shift ->
         let rec loop r s =
             match r, s with
             | Done, Done -> true 
-            | Next (m, km), Next (n, kn) when m = n -> 
-                (* print_int m ; *)
-                loop (km ()) (kn ())
+            | Next (m, km), Next (n, kn) when m = n -> loop (km ()) (kn ())
             | _, _ -> false
         in loop (run t1) (run t2) in
     (* trees *)
@@ -157,16 +155,109 @@ let () = delimited_control (fun reset shift ->
     assert (doer t1 t2 && doer t2 t3 && doer t1 t3))
 ;;
 
+let () = delimited_control (fun reset shift ->
+    let t = fun value -> shift (fun k -> fun y -> k value y) in
+    let printf = reset (fun () -> 
+        let prefix = t "hello" in 
+        fun x -> x ^ prefix ^ "world") in
+    let run = fun thunk -> 
+        reset (fun () -> let result = thunk () in fun state -> result) "" in
+    let result = run (fun () -> printf "good") in   
+        assert (print_string result; result = "goodhelloworld");
+) ;;
+
+let () = delimited_control (fun reset shift ->
+    let t = fun value -> shift (fun k -> fun y -> k value y) in
+    let printf = reset (fun () -> 
+        let prefix = t "hello" in 
+        fun [x;y] -> x ^ prefix ^ "world" ^ y) in
+    let run = fun thunk -> 
+        reset (fun () -> let result = thunk () in fun state -> result) [] in
+    let result = run (fun () -> printf ["good";"day"]) in   
+        assert (print_string result; result = "goodhelloworldday");
+) ;;
 
 
+let () = delimited_control (fun reset shift ->
+    let get = fun () -> shift (fun k -> fun state -> k state state) in
+    let tick = fun () -> shift (fun k -> fun state -> k state (state + 1)) in
+    let put = fun value -> shift (fun k -> fun state -> k state value) in
+    let run = fun thunk -> 
+        reset (fun () -> let result = thunk () in fun state -> result) 0 in
+    assert (run (fun () -> 
+        tick ();
+        tick ();
+        let a = get () in 
+        tick ();
+        get () - a) = 1);
+    assert (run (fun () -> 
+        let a = tick (); get () in 
+        let b = tick (); get () in 
+        a - b) = -1);
+    assert (run (fun () -> (tick (); get ()) - (tick (); get ())) = 1);
+    assert (run (fun () -> 
+        tick ();
+        tick ();
+        tick ();
+        put 0;
+        tick ();
+        get ()) = 1);
+) ;;
+ 
+type term_t = Var of string
+            | Lam of string * term_t
+            | App of term_t * term_t ;;
+
+let () = delimited_control (fun reset shift ->
+    assert (reset (fun () -> 1 + (shift (fun k -> 2 * 3))) = 6) ;
+    assert (reset (fun () -> 1 + (shift (fun k -> 2 * k 3))) = 8) 
+);;
+
+let () = delimited_control (fun reset shift ->
+    let either args = shift (fun k -> List.iter k args) in
+    reset (fun () -> let x = either [0; 1; 2] in print_int x ) ; print_newline ();
+);;
+
+let x = delimited_control (fun reset shift ->
+    let either args last = 
+        shift (fun k ->
+            let rec e = function
+                    | [] -> k last (* if `k` is not applied then `last` is not printed *)
+                    | x::xs -> k x; e xs; x
+            in e args) in
+    reset (fun () -> let x = either [1;2;3;] 0 in print_int x ; x)
+);;
+
+let () = delimited_control (fun reset shift ->
+    let either args = shift (fun k -> List.iter k args) in
+    reset (fun () ->
+        let p = either [true; false;] in
+        let q = either [true; false;] in
+        if (p || q) && (p || not q) && (not p || not q)
+        then (  print_string (string_of_bool p); 
+                print_string ", "; 
+                print_string (string_of_bool q); 
+                print_newline ()))
+);;
 
 
-
-
-
-
-
-
+let () = delimited_control (fun reset shift ->
+    let either args = shift (fun k -> List.iter k args) in
+    reset (fun () ->
+        let range = [1.;2.;3.;4.;5.;6.;7.;8.;9.;10.;11.] in
+        let x = either range in
+        let y = either range in
+        let z = either range in
+        if x**2. +. y**2. = z**2.
+        then (  print_string "(" ; 
+                print_string (string_of_float x); 
+                print_string ", "; 
+                print_string (string_of_float y); 
+                print_string ", "; 
+                print_string (string_of_float z); 
+                print_string ")"; 
+                print_newline ()))
+);;
 
 
 
