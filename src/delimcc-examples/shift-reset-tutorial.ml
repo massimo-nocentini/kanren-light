@@ -156,14 +156,16 @@ let () = delimited_control (fun reset shift ->
 ;;
 
 let () = delimited_control (fun reset shift ->
-    let t = fun value -> shift (fun k -> fun y -> k value y) in
+    let t: string -> string = fun value -> 
+        shift (fun (k:string -> string -> string) -> fun (y:string) -> k value y) in
     let printf = reset (fun () -> 
         let prefix = t "hello" in 
-        fun x -> x ^ prefix ^ "world") in
+        fun x -> prefix ^ x ^ "world") in
     let run = fun thunk -> 
-        reset (fun () -> let result = thunk () in fun state -> result) "" in
+        reset (fun () -> let result = thunk () in 
+                         fun state -> state ^ result) "ignoreme" in
     let result = run (fun () -> printf "good") in   
-        assert (print_string result; result = "goodhelloworld");
+        assert (print_string result; result = "ignoremehellogoodworld");
 ) ;;
 
 let () = delimited_control (fun reset shift ->
@@ -180,15 +182,16 @@ let () = delimited_control (fun reset shift ->
 
 let () = delimited_control (fun reset shift ->
     let get = fun () -> shift (fun k -> fun state -> k state state) in
-    let tick = fun () -> shift (fun k -> fun state -> k state (state + 1)) in
+    let tick:unit -> int = fun () -> 
+        shift (fun (k:int -> int -> int) -> fun state -> k state (state + 1)) in
     let put = fun value -> shift (fun k -> fun state -> k state value) in
     let run = fun thunk -> 
         reset (fun () -> let result = thunk () in fun state -> result) 0 in
     assert (run (fun () -> 
-        tick ();
-        tick ();
+        let 0 = tick () in
+        let 1 = tick () in
         let a = get () in 
-        tick ();
+        let 2 = tick () in
         get () - a) = 1);
     assert (run (fun () -> 
         let a = tick (); get () in 
@@ -257,6 +260,26 @@ let () = delimited_control (fun reset shift ->
                 print_string (string_of_float z); 
                 print_string ")"; 
                 print_newline ()))
+);;
+
+let () = delimited_control (fun reset shift ->
+    let t3 = Node (Empty, 1, Node(Node(Empty, 2, Empty), 3, Node(Empty, 4, Empty))) in
+    let walk t = 
+        shift (fun (k:int -> unit) ->
+            let rec w = function
+                        | Empty -> () (*failwith "leaf"*)
+                        | Node (l, i, r) -> w l; k i; w r in
+            w t) in
+    reset (fun () -> let i = walk t3 in print_int i );
+    print_newline ();
+    let add, pr, get = let l = ref [] in 
+        (fun i -> l := i :: !l), 
+        (fun () -> List.iter print_int (List.rev !l)),
+        (fun () -> !l) in
+    reset (fun () -> let i = walk t3 in add i );
+    pr();
+    print_newline ();
+    assert (get () = [4;3;2;1;]);
 );;
 
 
