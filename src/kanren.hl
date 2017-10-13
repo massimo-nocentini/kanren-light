@@ -1,3 +1,8 @@
+(* ========================================================================= *)
+(* Materiale di hol_light/tactics.ml "spacchettato" per ispezionare          *)
+(* definizioni e tipi..                                                      *)
+(* ========================================================================= *)
+
 (*
 type goal = (string * thm) list * term;;
 *)

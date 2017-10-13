@@ -6,8 +6,7 @@
 (* Generalized, Kanren-like tactics.                                         *)
 (* ------------------------------------------------------------------------- *)
 
-type kgoal = term list* goal;;
-
+type kgoal = term list * goal;;                     (* metavariables * goal *)
 type ktactic = kgoal -> goalstate;;
 
 type thm_ktactic = thm -> ktactic;;
@@ -93,10 +92,6 @@ let (print_goalstack:goalstack->unit) =
 (* ------------------------------------------------------------------------- *)
 (* top_thm done right!                                                       *)
 (* ------------------------------------------------------------------------- *)
-
-let fix_top_thm() =
-  let ((_,inst),[],f)::_ = !current_goalstack in
-  f inst [];;
 
 let ktop_thm() =
   match !current_goalstack with
@@ -200,7 +195,22 @@ let REFL_KTAC : ktactic =
     ([],inst),[],propagate_thm th;;
 
 (* ------------------------------------------------------------------------- *)
+(* Example: Difference between TAC_KTAC REFL_TAC and REFL_KTAC:              *)
+(*                                                                           *)
+(* set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;                           *)
+(* p();;                                                                     *)
+(* ke (TAC_KTAC REFL_TAC);;                                                  *)
+(* ke REFL_KTAC;;                                                            *)
+(* ktop_thm();;                                                              *)
+(* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
 (* Tactic that apply a conversion.                                           *)
+(* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
+(* TODO: Probabilmente vogliamo innescare un backtrack quando la             *)
+(* conversione "fallisce", nel senso che produce il goal ?- F.               *)
 (* ------------------------------------------------------------------------- *)
 
 let CHECK_TAC : tactic =
@@ -222,6 +232,11 @@ let CHEAT_KTAC = TAC_KTAC CHEAT_TAC;;
 (* Basic tactics.                                                            *)
 (* ------------------------------------------------------------------------- *)
 
+(* ------------------------------------------------------------------------- *)
+(* TODO: Sostituisce tutte le variabili (libere e vincolate) della           *)
+(* conclusione di un teorema con variabili fresche.  Non cambia le ipostesi. *)
+(* ------------------------------------------------------------------------- *)
+
 let fresh_thm th =
   let vars,bth = splitlist SPEC_VAR th in
   let vars' = map (genvar o snd o dest_var) vars in
@@ -229,10 +244,15 @@ let fresh_thm th =
   GENL vars' bth';;
 
 (* Test *)
-(*
+(*;;
 UNDISCH (ARITH_RULE `x = 1 ==> !x y. x + y = y + x`);;
 fresh_thm it;;
 *)
+
+(* ------------------------------------------------------------------------- *)
+(* TODO: Non è la stessa cosa di TAC_KTAC ACCEPT_TAC perché istanzia le      *)
+(* metavariabili.                                                            *)
+(* ------------------------------------------------------------------------- *)
 
 let ACCEPT_KTAC : thm_ktactic =
   let propagate_thm th i [] = INSTANTIATE_ALL i th in
@@ -273,6 +293,11 @@ let (MP_KTAC : thm -> ktactic) =
       let th' = SPEC_ALL (INSTANTIATE_ALL inst1 th) in
       (mvs',inst1),[gl],propagate_mp th';;
 *)
+
+(* ------------------------------------------------------------------------- *)
+(* TODO: Come per ACCEPT_KTAC, è(?) più potente di TAC_KTAC (MP_TAC tm).     *)
+(* TODO: Non sarebbe male fare degli esempi!.                                *)
+(* ------------------------------------------------------------------------- *)
 
 let (MP_KTAC : thm -> ktactic) =
   fun th (mvs,(asl,w)) ->
@@ -410,7 +435,15 @@ let MAP_KEVERY ktacf lst =
 let MAP_KFIRST ktacf lst =
   KFIRST (mapfilter ktacf lst);;
 
-(* TODO: controllare le meta!!!! *)
+(* ------------------------------------------------------------------------- *)
+(* CHANGED_KTAC                                                              *)
+(* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
+(* TODO: controllare le meta!!!!                                             *)
+(* TODO: Capire il todo precedente e risolverlo...                           *)
+(* ------------------------------------------------------------------------- *)
+
 let (CHANGED_KTAC: ktactic -> ktactic) =
   fun ktac (mvs,g) as gs ->
     let (meta,gl,_ as gstate) = ktac gs in
@@ -487,6 +520,10 @@ let (KVALID:ktactic->ktactic) =
        forall (fun t -> exists (aconv t) maxasms) (subtract asl' [false_tm])
     then res else failwith "KVALID: Invalid tactic";;
 
+(* ------------------------------------------------------------------------- *)
+(* Silly test for KVALID.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
 let WRONG_KTAC : ktactic =
   let wrong_propagate _ _ = REFL `1` in
   fun _ -> null_meta,[],wrong_propagate;;
@@ -519,8 +556,8 @@ let (kprove : term * ktactic -> term list * thm) =
     eqs,th;;
 
 (* ------------------------------------------------------------------------- *)
-
-(*;;
-META_SPEC_TAC
-X_META_EXISTS_TAC
-*)
+(* Possibly inspiring tactics making use of metavariables in HOL Light:      *)
+(*                                                                           *)
+(* META_SPEC_TAC                                                             *)
+(* X_META_EXISTS_TAC                                                         *)
+(* ------------------------------------------------------------------------- *)

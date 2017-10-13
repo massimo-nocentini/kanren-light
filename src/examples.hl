@@ -8,6 +8,12 @@ p();;
 ke REFL_KTAC;;
 ktop_thm();;
 
+(* Same with TAC_KTAC REFL_TAC : Fails! *)
+set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;
+p();;
+ke (TAC_KTAC REFL_TAC);;
+ktop_thm();;
+
 (* Example 2 *)
 set_kanren_goal `META A B C. [A;C;2] = [0;A;B]`;;
 p();;
@@ -18,7 +24,7 @@ ktop_thm();;
 (* How to break the invariant!                                               *)
 (* ------------------------------------------------------------------------- *)
 
-(*
+(*;;
 set_kanren_goal
   `META X:A.
      (!Y:A. ancestor Y pluto)
@@ -64,11 +70,12 @@ ktop_thm();;
 
 (* 1 : funziona! *)
 current_goalstack := cg; p();;
-ke (kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                    (TAC_KTAC CONJ_TAC))
-           (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+           (kthen_ (TAC_KTAC CONJ_TAC)
+                   (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
 ktop_thm();;
 
+(* 2 : funziona! *)
 kprove
  (`META X:A.
      (!X. ancestor X X) AND
@@ -81,21 +88,7 @@ kprove
                  (TAC_KTAC CONJ_TAC))
          (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
 
-(* 2 : error tryfind *)
-current_goalstack := cg; p();;
-ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-           (kthen_ (TAC_KTAC CONJ_TAC)
-                   (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
-ktop_thm();;
-
-(* 3 : error tryfind *)
-current_goalstack := cg; p();;
-ke (trace_ktactic "1" (FIRST_ASSUM_KTAC MP_KTAC));;
-ke (kthen_ (trace_ktactic "2" (TAC_KTAC CONJ_TAC))
-           (trace_ktactic "3" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
-ktop_thm();;
-
-(* 4 : funziona! *)
+(* 3 : funziona! *)
 current_goalstack := cg; p();;
 ke (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
                     (TAC_KTAC CONJ_TAC))
@@ -103,6 +96,10 @@ ke (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
              FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
 ktop_thm();;
 
+(* ------------------------------------------------------------------------- *)
+(* Tentativi ingenui di creare una tattica prolog.  Non può funzionare in    *)
+(* maniera così semplice perché manca la struttura per implementare il       *)
+(* backtrack.                                                                *)
 (* ------------------------------------------------------------------------- *)
 
 let FIND_KTAC:ktactic =
@@ -132,9 +129,8 @@ let cg = !current_goalstack;;
 p();;
 
 (* Loop!! *)
-(*
+(*;;
 ke PROLOG_KTAC;;
-ktop_thm();;
 *)
 
 current_goalstack := cg; p();;

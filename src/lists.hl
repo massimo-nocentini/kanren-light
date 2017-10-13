@@ -107,8 +107,10 @@ kprove(`META ys. SORT (<=) [2;7;3;3;1;1;5] ys`, QUICKSORT_KTAC);;
 kprove(`META ys. SORT (<=) [1;2;3;4] ys`, QUICKSORT_KTAC);;
 kprove(`META ys. SORT (<=) [3;2;7;1;5] (APPEND [1; 2] ys)`, QUICKSORT_KTAC);;
 kprove(`META x w. SORT (<=) [4;3;2;1] [x;2;3;w]`, QUICKSORT_KTAC);;
-(*
+(* Ok: Fallisce perché il secondo argomento non è ordinato;;
 kprove(`META x w. SORT (<=) [4;3;2;1] [x;2;1;w]`, QUICKSORT_KTAC);;
+*)
+(* La ricerca prolog non risolve questo problema (???);;
 kprove(`META ys. SORT (<=) (APPEND [1; 2] ys) [1;2;3;4;5]`, QUICKSORT_KTAC);;
 *)
 
@@ -201,7 +203,7 @@ kprove(`META xs:num list. LENGTH xs = 1`, LENGTH_KTAC);;
 
 (* Do not work!  Our kthenl_ do not perform backtracking from one branch
    to the previous ones. *)
-(*
+(*;;
 kprove(`META xs:num list. LENGTH xs = SUC (SUC 0)`, LENGTH_KTAC);;
 
 set_kanren_goal `META xs:num list. LENGTH xs = SUC (SUC 0)`; p();;
