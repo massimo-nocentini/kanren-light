@@ -49,6 +49,15 @@ ktop_thm();;
 
 set_kanren_goal
   `META X:A.
+     (!Y:A. ancestor Y pluto)
+     ENTAILS
+     ancestor pippo X`;;
+p ();;
+ke (FIRST_ASSUM_KTAC (fun tm -> TAC_KTAC (ACCEPT_TAC tm)));;
+ktop_thm();;
+
+set_kanren_goal
+  `META X:A.
      (!X. ancestor X X) AND
      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
      ancestor pippo pluto AND
@@ -58,7 +67,11 @@ set_kanren_goal
 let cg = !current_goalstack;;
 p();;
 
+(* -2 : funziona! *)
+ke (TAC_KTAC (MATCH_MP_TAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`)));;
+
 (* -1 : funziona! *)
+current_goalstack := cg; p();;
 ke (MP_KTAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`));;
 
 (* 0 : funziona! *)

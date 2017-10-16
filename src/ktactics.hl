@@ -233,8 +233,8 @@ let CHEAT_KTAC = TAC_KTAC CHEAT_TAC;;
 (* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
-(* TODO: Sostituisce tutte le variabili (libere e vincolate) della           *)
-(* conclusione di un teorema con variabili fresche.  Non cambia le ipostesi. *)
+(* Sostituisce tutte le variabili (libere e vincolate) della conclusione di  *)
+(* un teorema con variabili fresche.  Non cambia le ipostesi.                *)
 (* ------------------------------------------------------------------------- *)
 
 let fresh_thm th =
@@ -250,7 +250,7 @@ fresh_thm it;;
 *)
 
 (* ------------------------------------------------------------------------- *)
-(* TODO: Non è la stessa cosa di TAC_KTAC ACCEPT_TAC perché istanzia le      *)
+(* Non è la stessa cosa di TAC_KTAC ACCEPT_TAC perché istanzia le            *)
 (* metavariabili.                                                            *)
 (* ------------------------------------------------------------------------- *)
 
@@ -295,8 +295,8 @@ let (MP_KTAC : thm -> ktactic) =
 *)
 
 (* ------------------------------------------------------------------------- *)
-(* TODO: Come per ACCEPT_KTAC, è(?) più potente di TAC_KTAC (MP_TAC tm).     *)
-(* TODO: Non sarebbe male fare degli esempi!.                                *)
+(* Attenzione: MP_KTAC è la controparte di MATCH_MP_TAC (non MP_TAC).        *)
+(* Diversa da TAC_KTAC (MP_TAC tm) perché fa uso delle metavariabili.        *)
 (* ------------------------------------------------------------------------- *)
 
 let (MP_KTAC : thm -> ktactic) =
@@ -440,8 +440,10 @@ let MAP_KFIRST ktacf lst =
 (* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
-(* TODO: controllare le meta!!!!                                             *)
-(* TODO: Capire il todo precedente e risolverlo...                           *)
+(* NB: We only check for a change in the goal, since any change in the       *)
+(* metas must produce a different goal.  We enforce the invariant in the     *)
+(* tactic composition that metas must occur in the goal.  See function       *)
+(* inst_kgoal.                                                               *)
 (* ------------------------------------------------------------------------- *)
 
 let (CHANGED_KTAC: ktactic -> ktactic) =
@@ -460,7 +462,7 @@ let rec REPLICATE_KTAC n ktac =
 let (FIRST_ASSUM_KTAC: thm_ktactic -> ktactic) =
   fun ktac (mvs,(asl,w)) as kg ->
     try MAP_KFIRST (fun (_,th) -> ktac th) asl kg with
-      Failure _ -> failwith "pippo";;
+      Failure _ -> failwith "FIRST_ASSUM_KTAC";;
 
 (* ------------------------------------------------------------------------- *)
 (* Interactive use of tactics.                                               *)
