@@ -400,9 +400,15 @@ let (THEN),(THENL) =
 (* Fail/resume reasoning patterns.                                           *)
 (* ------------------------------------------------------------------------- *)
 
+exception Choice of goalstate * (unit -> goalstate);;
+
 let (korelse_: ktactic -> ktactic -> ktactic) =
   fun ktac1 ktac2 g ->
-    try ktac1 g with Failure _ -> ktac2 g;;
+    try raise (Choice(ktac1 g,fun () -> ktac2 g)) with Failure _ -> ktac2 g;;
+
+let CUT_KTAC : ktactic -> ktactic =
+  fun ktac g ->
+    try ktac g with Choice (g,_) -> g;;
 
 let (FAIL_KTAC: string -> ktactic) =
   fun tok g -> failwith tok;;
