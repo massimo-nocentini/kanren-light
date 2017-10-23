@@ -47,6 +47,7 @@ p ();;
 ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
 
+(* Fails! *)
 set_kanren_goal
   `META X:A.
      (!Y:A. ancestor Y pluto)
@@ -89,7 +90,7 @@ ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
 ktop_thm();;
 
 (* 2 : funziona! *)
-kprove
+kprove1
  (`META X:A.
      (!X. ancestor X X) AND
      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
@@ -99,7 +100,30 @@ kprove
      ancestor pippo X`,
   kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
                  (TAC_KTAC CONJ_TAC))
+         (CUT_KTAC (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC))));;
+
+kprove1
+ (`META X:A.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                 (TAC_KTAC CONJ_TAC))
          (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+
+kprove1
+ (`META X:A.
+     (!X. ancestor X X) AND
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                 (TAC_KTAC CONJ_TAC))
+         (CUT_KTAC (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
 
 (* 3 : funziona! *)
 current_goalstack := cg; p();;
@@ -214,3 +238,62 @@ ke (MP_KTAC (ISPEC `PARENT` RTC_INC));;
 ke (ACCEPT_KTAC PARENT_1);;
 top_thm();;
 *)
+
+
+(* ------------------------------------------------------------------------- *)
+(* New set of examples with Choice.                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let even_tm = `EVEN`;;
+let EVEN_RULE n =
+  EQT_ELIM (NUM_EVEN_CONV (mk_comb(even_tm, mk_numeral n)));;
+
+let rec even_ktac n g =
+  (korelse_ (ACCEPT_KTAC (EVEN_RULE n)) (even_ktac (n +/ Int 2))) g;;
+
+let EVEN_KTAC : ktactic = even_ktac num_0;;
+
+let EVEN0,EVEN2 = CONJ_PAIR (ARITH_RULE `EVEN 0 /\ EVEN 2`);;
+
+set_kanren_goal `META X. EVEN X`;;
+let myk = ref (fun () -> hd(!current_goalstack));;
+let k = 
+try
+ke (korelse_ (ACCEPT_KTAC EVEN0) (ACCEPT_KTAC EVEN2))
+with Choice (_, k) -> (myk := k; fail());;
+
+!myk ();;
+current_goalstack := [it];;
+ktop_thm();;
+
+kprove1(`META X. EVEN X`,
+  korelse_ (ACCEPT_KTAC EVEN0) (ACCEPT_KTAC EVEN2));;
+
+kprove1(`META X. EVEN X`,
+  DROP_KTAC 0 (korelse_ (ACCEPT_KTAC EVEN0) (ACCEPT_KTAC EVEN2)));;
+
+kprove1(`META X. EVEN X`,
+  DROP_KTAC 10 EVEN_KTAC);;
+
+kprove1(`META X. EVEN X /\ 3 <= X`,
+  kthenl_ (TAC_KTAC CONJ_TAC)
+          [ACCEPT_KTAC (ARITH_RULE `EVEN 4`);
+           ACCEPT_KTAC (ARITH_RULE `3 <= 4`)]);;
+
+kprove1(`META X. EVEN X /\ 3 <= X`,
+  kthenl_ (TAC_KTAC CONJ_TAC)
+          [korelse_ (ACCEPT_KTAC (ARITH_RULE `EVEN 2`))
+                    (ACCEPT_KTAC (ARITH_RULE `EVEN 4`));
+           ACCEPT_KTAC (ARITH_RULE `3 <= 4`)]);;
+
+set_kanren_goal `META X. EVEN X /\ 3 <= X`;;
+ke (kthenl_ (TAC_KTAC CONJ_TAC)
+            [korelse_ (ACCEPT_KTAC (ARITH_RULE `EVEN 2`))
+                      (ACCEPT_KTAC (ARITH_RULE `EVEN 4`));
+             ACCEPT_KTAC (ARITH_RULE `3 <= 4`)]);;
+
+
+try
+fail()
+with Choice (g,_) -> current_goalstack := [g];;
+ktop_thm();;

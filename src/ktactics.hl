@@ -6,6 +6,8 @@
 (* Generalized, Kanren-like tactics.                                         *)
 (* ------------------------------------------------------------------------- *)
 
+exception Choice of goalstate * (unit -> goalstate);;
+
 type kgoal = term list * goal;;                     (* metavariables * goal *)
 type ktactic = kgoal -> goalstate;;
 
@@ -383,12 +385,35 @@ let (ktacsequence : goalstate -> ktactic list -> goalstate) =
     ((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just);;
 *)
 
+(* Versioni senza Choice *)
+(*
 let (kthenl_: ktactic -> ktactic list -> ktactic) =
   fun ktac1 ktac2l g -> ktacsequence (ktac1 g) ktac2l;;
 
 let (kthen_: ktactic -> ktactic -> ktactic) =
   fun ktac1 ktac2 g ->
     let _,gls,_ as gstate = ktac1 g in
+    ktacsequence gstate (replicate ktac2 (length gls));;
+*)
+
+let (kthenl_: ktactic -> ktactic list -> ktactic) =
+  fun ktac1 ktac2l g ->
+    let gstate =
+      try ktac1 g with Choice (gstate, k) ->
+        let gstate' = ktacsequence gstate ktac2l in
+        let k' () = ktacsequence (k ()) ktac2l in
+        raise (Choice (gstate', k')) in
+    ktacsequence gstate ktac2l;;
+
+let (kthen_: ktactic -> ktactic -> ktactic) =
+  fun ktac1 ktac2 g ->
+    let _,gls,_ as gstate =
+      try ktac1 g with Choice (_,gls,_ as gstate, k) ->
+        let gstate' = ktacsequence gstate (replicate ktac2 (length gls)) in
+        let k' () =
+          let _,gls,_ as gstate = k () in
+          ktacsequence gstate (replicate ktac2 (length gls)) in
+        raise (Choice (gstate', k')) in
     ktacsequence gstate (replicate ktac2 (length gls));;
 
 (*
@@ -400,8 +425,6 @@ let (THEN),(THENL) =
 (* Fail/resume reasoning patterns.                                           *)
 (* ------------------------------------------------------------------------- *)
 
-exception Choice of goalstate * (unit -> goalstate);;
-
 let (korelse_: ktactic -> ktactic -> ktactic) =
   fun ktac1 ktac2 g ->
     try raise (Choice(ktac1 g,fun () -> ktac2 g)) with Failure _ -> ktac2 g;;
@@ -409,6 +432,18 @@ let (korelse_: ktactic -> ktactic -> ktactic) =
 let CUT_KTAC : ktactic -> ktactic =
   fun ktac g ->
     try ktac g with Choice (g,_) -> g;;
+
+let rec next_choice (k:unit -> goalstate) : (unit -> goalstate) =
+  try ignore (k ()); failwith "next_choices" with Choice (_, k) -> k;;
+
+let rec drop_choices n (k:unit -> goalstate) : (unit -> goalstate) =
+  if n = 0 then k else drop_choices (n - 1) (next_choice k);;
+
+let rec DROP_KTAC : int -> ktactic -> ktactic =
+  fun n ktac g ->
+    if n = 0 then ktac g else
+    try ignore (ktac g); failwith "DROP_KTAC"
+    with Choice (_, k) -> drop_choices (n - 1) k ();;
 
 let (FAIL_KTAC: string -> ktactic) =
   fun tok g -> failwith tok;;
@@ -512,6 +547,66 @@ let (kby:ktactic->refinement) =
       just i sths in
     (union newmvs omvs,inst'),gls',just';;
 
+let (kby1:ktactic->refinement) =
+  fun ktac ((mvs,inst),gls,just) ->
+    if gls = [] then failwith "No goal set" else
+    let g = hd gls
+    and ogls = tl gls in
+    let ((newmvs,newinst),subgls,subjust) = CUT_KTAC ktac (mvs,g) in
+    let n = length subgls in
+    let okgls = map (curry (inst_kgoal newinst) mvs) ogls in
+    let omvs = unions (map fst okgls) in
+    let inst' = compose_insts inst newinst
+    and gls' = subgls @ map snd okgls in
+    let just' i ths =
+      let cths,oths = chop_list n ths in
+      let sths = subjust i cths :: oths in
+      just i sths in
+    (union newmvs omvs,inst'),gls',just';;
+
+
+let (kbyk:ktactic->refinement) =
+  fun ktac ((mvs,inst),gls,just) ->
+    if gls = [] then failwith "No goal set" else
+    let g = hd gls
+    and ogls = tl gls in
+    let ((newmvs,newinst),subgls,subjust) =
+      try ktac (mvs,g) with Choice (((newmvs,newinst),subgls,subjust), k) ->
+        let gstate' =
+          let n = length subgls in
+          let okgls = map (curry (inst_kgoal newinst) mvs) ogls in
+          let omvs = unions (map fst okgls) in
+          let inst' = compose_insts inst newinst
+          and gls' = subgls @ map snd okgls in
+          let just' i ths =
+            let cths,oths = chop_list n ths in
+            let sths = subjust i cths :: oths in
+            just i sths in
+          (union newmvs omvs,inst'),gls',just' in
+        let k' () =
+          let ((newmvs,newinst),subgls,subjust) = k () in
+          let n = length subgls in
+          let okgls = map (curry (inst_kgoal newinst) mvs) ogls in
+          let omvs = unions (map fst okgls) in
+          let inst' = compose_insts inst newinst
+          and gls' = subgls @ map snd okgls in
+          let just' i ths =
+            let cths,oths = chop_list n ths in
+            let sths = subjust i cths :: oths in
+            just i sths in
+          (union newmvs omvs,inst'),gls',just' in
+        raise (Choice (gstate', k')) in          
+    let n = length subgls in
+    let okgls = map (curry (inst_kgoal newinst) mvs) ogls in
+    let omvs = unions (map fst okgls) in
+    let inst' = compose_insts inst newinst
+    and gls' = subgls @ map snd okgls in
+    let just' i ths =
+      let cths,oths = chop_list n ths in
+      let sths = subjust i cths :: oths in
+      just i sths in
+    (union newmvs omvs,inst'),gls',just';;
+
 let (KVALID:ktactic->ktactic) =
   let fake_thm (asl,w) =
     let asms = itlist (union o hyp o snd) asl [] in
@@ -542,24 +637,28 @@ let ke ktac = refine(kby(KVALID ktac));;
 (* Perform refinement proof, tactic proof etc.                               *)
 (* ------------------------------------------------------------------------- *)
 
-let KTAC_PROOF (gstate : goalstate) (ktac:ktactic) : instantiation * thm =
-  let (_,inst),sgs,just = kby ktac gstate in
+let KTAC_PROOF1 (gstate : goalstate) (ktac:ktactic) : instantiation * thm =
+  let (_,inst),sgs,just = kby1 ktac gstate in
   if sgs <> [] then failwith "KTAC_PROOF: Unsolved goals" else
   inst,just inst [];;
 
-let (kprove : term * ktactic -> term list * thm) =
+let (kprove1 : term * ktactic -> term list * thm) =
   let propagate_thm i [th] = INSTANTIATE_ALL i th in
   fun tm,ktac ->
     let mvs,(atms,w) = dest_kanren_goal tm in
     let asl = map (fun tm -> "",ASSUME tm) atms in
     let gstate = (mvs,null_inst),[asl,w],propagate_thm in
-    let inst,th = KTAC_PROOF gstate ktac in
+    let inst,th = KTAC_PROOF1 gstate ktac in
     let th =
       let t' = concl th in
       if t' = w then th else
       try EQ_MP (ALPHA t' (instantiate inst w)) th
       with Failure _ ->
-        failwith "kprove: tactic generated wrong theorem" in
+        ( report "AIUTO!!!";
+          report (string_of_term t');
+          report (string_of_term (instantiate inst w));
+          report (string_of_thm th);
+          failwith "kprove: tactic generated wrong theorem" ) in
     let eqs = map (fun v -> mk_eq(v,instantiate inst v)) mvs in
     eqs,th;;
 
