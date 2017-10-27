@@ -6,16 +6,22 @@
 (* Chains.                                                                   *)
 (* ------------------------------------------------------------------------- *)
 
-type chain = unit -> ounit;;
+type inst = (term, term) func;;
+
+let empty_inst : inst = undefined;;
+
+type chain = unit -> unit;;
+
 exception Stop;;
-exception Choice of term * chain;;
+
+exception Choice of inst * chain;;
 
 let empty : chain = fun () -> raise Stop;;
 
-let yield (tm:term) = fun () -> raise (Choice (tm, empty));;
+let yield inst = fun () -> raise (Choice (inst, empty));;
 
-let rec const (tm:term) : chain =
-  fun () -> raise (Choice (tm, const tm));;
+let rec const inst : chain =
+  fun () -> raise (Choice (inst, const inst));;
 
 let rec sequential (k1:chain) (k2:chain) : chain =
   fun () ->
@@ -23,7 +29,7 @@ let rec sequential (k1:chain) (k2:chain) : chain =
       Stop -> k2 ()
     | Choice (tm, k) -> raise (Choice (tm, sequential k k2));;
 
-let rec bind (k:chain) (f:term->chain) : chain =
+let rec bind (k:chain) (f:inst->chain) : chain =
   fun () ->
     try k () with
       Stop -> raise Stop
@@ -35,7 +41,7 @@ let rec mplus (k1:chain) (k2:chain) : chain =
       Stop -> k2 ()
     | Choice (tm, k) -> raise (Choice (tm, mplus k2 k));;
 
-let rec bindi (k:chain) (f:term->chain) : chain =
+let rec bindi (k:chain) (f:inst->chain) : chain =
   fun () ->
     try k () with
       Stop -> raise Stop
@@ -45,19 +51,19 @@ let chain_map f c = bind c (yield o f);;
 
 let chain_of_list = end_itlist sequential o map yield;;
 
-let cons tm = sequential (yield tm);;
+let cons inst = sequential (yield inst);;
 
-let peel (k:chain) : term * chain =
-  try k (); `T`,empty with
+let peel (k:chain) : inst * chain =
+  try k (); empty_inst,empty with
     Stop -> failwith "head"
-  | Choice (tm,k) -> tm,k;;
+  | Choice (inst,k) -> inst,k;;
 
 let head k = fst (peel k);;
 let tail k = snd (peel k);;
 
 let rec take n k =
   if n <= 0 then [] else
-  try let tm,k' = peel k in tm :: take (n - 1) k'
+  try let inst,k' = peel k in inst :: take (n - 1) k'
   with Failure _ -> [];;
 
 (* ------------------------------------------------------------------------- *)
@@ -68,6 +74,8 @@ let on_numeral f = mk_small_numeral o f o dest_small_numeral;;
 
 let numeral_succ = on_numeral succ;;
 
+
+(*
 let rec nats n () = cons (mk_small_numeral n) (nats (n+1)) ();;
 
 take 10 (const `0`);;
@@ -96,10 +104,6 @@ take 10 (chain_map numeral_succ example);;
 
 take 10 (nats 3);;
 
-(* ------------------------------------------------------------------------- *)
-(* Chains.                                                                   *)
-(* ------------------------------------------------------------------------- *)
-
 let twos_and_zeros_test =
   assert ([`2`; `0`; `2`; `0`; `2`; `0`; `2`; `0`; `2`; `0`] =
   (take 10 (mplus (const `2`) (const `0`))));;
@@ -109,22 +113,13 @@ let bind_test =
            `2`; `4`; `2`; `10`; `2`; `4`; `2`; `6`; `2`; `4`; `2`; `8`;
            `2`; `4`; `2`; `6`; `2`; `4`] =
           (take 30 (bindi (nats 1) (const o on_numeral (( * ) 2)))));;
+*)
 
 (* ------------------------------------------------------------------------- *)
 (* Hic sunt leones!                                                          *)
 (* ------------------------------------------------------------------------- *)
 
-type inst = (term, term) func;;
-
-let empty_inst = undefined;;
-
 let fresh_var s v = variant (dom s) v;;
-
-type goal = inst -> inst chain;;
-
-let failure : goal = fun s -> Empty;;
-
-let succeed : goal = fun s -> Link (s, failure);;
 
 let fresh_int : unit -> int =
   let count = ref 0 in
@@ -132,6 +127,8 @@ let fresh_int : unit -> int =
     let n = !count in
     count := n + 1;
     n;;
+
+type goal = inst -> chain;;
 
 let fresh (c : term -> goal) : goal =
   fun s ->
@@ -151,13 +148,13 @@ let rec unification tm1 tm2 : inst -> inst =
     else fail();;
 
 let unify tm1 tm2 : goal =
-  fun s -> succeed (unification tm1 tm2 s);;
+  fun s -> yield (unification tm1 tm2 s);;
 
 let disj (g1:goal) (g2:goal) : goal =
-  fun s -> mplusf (g1 s) (fun () -> g2 s);;
+  fun i -> mplus (g1 i) (g2 i);;
 
 let conj (g1:goal) (g2:goal) : goal =
-  fun s -> bind (g1 s) g2;;
+  fun i -> bindi (g1 i) g2;;
 
 (* `p 1 2 \/ p 2 3 \/ p 2 4` *)
 let gg =
@@ -167,12 +164,13 @@ let gg =
        conj (unify x `2`) (unify y `3`);
        conj (unify x `3`) (unify y `4`)]));;
 
-
 let gg = fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
 
 let simple_unify_test =
   assert ([(`n0:num`, `1`); (`n1:num`, `5`)] =
           (let it = hd (take 10 (gg empty_inst)) in graph it));;
+
+let it = hd (take 10 (gg empty_inst)) in graph it;;
 
 let tm = `p 1 2:bool`;;
 let ftm,args = strip_comb tm;;
