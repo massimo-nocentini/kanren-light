@@ -1,0 +1,178 @@
+(* ========================================================================= *)
+(* Kanren Light.                                                             *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Chains.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+type chain = unit -> ounit;;
+exception Stop;;
+exception Choice of term * chain;;
+
+let empty : chain = fun () -> raise Stop;;
+
+let yield (tm:term) = fun () -> raise (Choice (tm, empty));;
+
+let rec const (tm:term) : chain =
+  fun () -> raise (Choice (tm, const tm));;
+
+let rec sequential (k1:chain) (k2:chain) : chain =
+  fun () ->
+    try k1 () with
+      Stop -> k2 ()
+    | Choice (tm, k) -> raise (Choice (tm, sequential k k2));;
+
+let rec bind (k:chain) (f:term->chain) : chain =
+  fun () ->
+    try k () with
+      Stop -> raise Stop
+    | Choice (tm, k') -> sequential (f tm) (bind k' f) ();;
+
+let rec mplus (k1:chain) (k2:chain) : chain =
+  fun () ->
+    try k1 () with
+      Stop -> k2 ()
+    | Choice (tm, k) -> raise (Choice (tm, mplus k2 k));;
+
+let rec bindi (k:chain) (f:term->chain) : chain =
+  fun () ->
+    try k () with
+      Stop -> raise Stop
+    | Choice (tm, k') -> mplus (f tm) (bind k' f) ();;
+
+let chain_map f c = bind c (yield o f);; 
+
+let chain_of_list = end_itlist sequential o map yield;;
+
+let cons tm = sequential (yield tm);;
+
+let peel (k:chain) : term * chain =
+  try k (); `T`,empty with
+    Stop -> failwith "head"
+  | Choice (tm,k) -> tm,k;;
+
+let head k = fst (peel k);;
+let tail k = snd (peel k);;
+
+let rec take n k =
+  if n <= 0 then [] else
+  try let tm,k' = peel k in tm :: take (n - 1) k'
+  with Failure _ -> [];;
+
+(* ------------------------------------------------------------------------- *)
+(* Examples.                                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let on_numeral f = mk_small_numeral o f o dest_small_numeral;;
+
+let numeral_succ = on_numeral succ;;
+
+let rec nats n () = cons (mk_small_numeral n) (nats (n+1)) ();;
+
+take 10 (const `0`);;
+
+let example = chain_of_list (map mk_small_numeral (0--10));;
+
+take 3 example;;
+
+let three_nums n = chain_of_list (map mk_small_numeral (n--(n+2)));;
+
+take 10 (end_itlist sequential (map three_nums (0--10)));;
+take 10 (end_itlist mplus      (map three_nums (0--10)));;
+
+take 10 (bind  example yield);;
+take 10 (bindi example yield);;
+take 10 (bind  example (fun tm -> chain_of_list [tm; numeral_succ tm]));;
+take 10 (bindi example (fun tm -> chain_of_list [tm; numeral_succ tm]));;
+
+take 10 (bind  example (fun tm -> chain_of_list [tm; tm; numeral_succ tm]));;
+take 10 (bindi example (fun tm -> chain_of_list [tm; tm; numeral_succ tm]));;
+
+take 10 (bind  example (fun tm -> nats (2 * dest_small_numeral tm)));;
+take 10 (bindi example (fun tm -> nats (2 * dest_small_numeral tm)));;
+
+take 10 (chain_map numeral_succ example);;
+
+take 10 (nats 3);;
+
+(* ------------------------------------------------------------------------- *)
+(* Chains.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let twos_and_zeros_test =
+  assert ([`2`; `0`; `2`; `0`; `2`; `0`; `2`; `0`; `2`; `0`] =
+  (take 10 (mplus (const `2`) (const `0`))));;
+
+let bind_test =
+  assert ([`2`; `4`; `2`; `6`; `2`; `4`; `2`; `8`; `2`; `4`; `2`; `6`;
+           `2`; `4`; `2`; `10`; `2`; `4`; `2`; `6`; `2`; `4`; `2`; `8`;
+           `2`; `4`; `2`; `6`; `2`; `4`] =
+          (take 30 (bindi (nats 1) (const o on_numeral (( * ) 2)))));;
+
+(* ------------------------------------------------------------------------- *)
+(* Hic sunt leones!                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+type inst = (term, term) func;;
+
+let empty_inst = undefined;;
+
+let fresh_var s v = variant (dom s) v;;
+
+type goal = inst -> inst chain;;
+
+let failure : goal = fun s -> Empty;;
+
+let succeed : goal = fun s -> Link (s, failure);;
+
+let fresh_int : unit -> int =
+  let count = ref 0 in
+  fun () ->
+    let n = !count in
+    count := n + 1;
+    n;;
+
+let fresh (c : term -> goal) : goal =
+  fun s ->
+    let v = fresh_var s (mk_var("n"^string_of_int(fresh_int()),`:num`)) in
+    c v s;;
+
+let rec unification tm1 tm2 : inst -> inst =
+  fun s ->
+    if is_var tm1 then (tm1 |-> tm2) s else
+    if is_var tm2 then (tm2 |-> tm1) s else
+    if is_const tm1 && is_const tm2 && tm1 = tm2 then s else
+    if is_comb tm1 && is_comb tm2
+    then let f1,x1 = dest_comb tm1 in
+         let f2,x2 = dest_comb tm2 in
+         let s' = unification x1 x2 s in
+         unification f1 f2 s'
+    else fail();;
+
+let unify tm1 tm2 : goal =
+  fun s -> succeed (unification tm1 tm2 s);;
+
+let disj (g1:goal) (g2:goal) : goal =
+  fun s -> mplusf (g1 s) (fun () -> g2 s);;
+
+let conj (g1:goal) (g2:goal) : goal =
+  fun s -> bind (g1 s) g2;;
+
+(* `p 1 2 \/ p 2 3 \/ p 2 4` *)
+let gg =
+  fresh (fun x -> fresh (fun y ->
+    end_itlist disj
+      [conj (unify x `1`) (unify y `2`);
+       conj (unify x `2`) (unify y `3`);
+       conj (unify x `3`) (unify y `4`)]));;
+
+
+let gg = fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
+
+let simple_unify_test =
+  assert ([(`n0:num`, `1`); (`n1:num`, `5`)] =
+          (let it = hd (take 10 (gg empty_inst)) in graph it));;
+
+let tm = `p 1 2:bool`;;
+let ftm,args = strip_comb tm;;
