@@ -8,11 +8,6 @@
 
 type 'a chain = Empty | Link of 'a * ('a -> 'a chain);; 
 
-let rec mplus (c1: 'a chain) (c2: 'a chain) : 'a chain =
-   match c1 with
-     Empty -> c2
-   | Link (x, f) -> Link (x, fun a -> mplus c2 (f x));;
-
 let rec mplusf (c1: 'a chain) (c2: unit -> 'a chain) : 'a chain =
    match c1 with
      Empty -> c2 ()
@@ -53,11 +48,14 @@ let rec const (x : 'a) : 'a chain = Link(x, fun _ -> const x);;
 
 let rec nats n = Link(n, fun _ -> nats (n+1));;
 
-let twos_and_zeros_test = assert ([2; 0; 2; 0; 2; 0; 2; 0; 2; 0] = 
-                                  (take 10 (mplus (const 2) (const 0))));;
+let twos_and_zeros_test =
+  assert ([2; 0; 2; 0; 2; 0; 2; 0; 2; 0] = 
+          take 10 (mplusf (const 2) (fun () -> const 0)));;
 
-let bind_test = assert ([2; 4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4; 2; 10; 2; 4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4] = 
-                        (take 30 (bind (nats 1) (fun n -> const (2 * n)))));;
+let bind_test =
+  assert ([2; 4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4; 2; 10; 2;
+           4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4] = 
+          take 30 (bind (nats 1) (fun n -> const (2 * n))));;
 (*
     previous result should be interpreted as follows:
     2₀ 2₂ 2₄ 2₆ 2₈ 2₁₀ 2₁₂ 2₁₄ 2₁₆ 2₁₈ 2₂₀ 2₂₂ 2₂₄ 2₂₆  2₂₈
@@ -124,8 +122,23 @@ let gg =
 
 let gg = fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
 
-let simple_unify_test = assert ([(`n0:num`, `1`); (`n1:num`, `5`)] = 
-                                (let it = hd (take 10 (gg empty_status)) in graph it));;
+map graph (take 10 (gg empty_status));;
 
-let tm = `p 1 2:bool`;;
-let ftm,args = strip_comb tm;;
+(* ------------------------------------------------------------------------- *)
+(* Goal with natural numbers.                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let gg = disj (unify `x:num` `1`)
+              (disj (unify `x:num` `2`) (unify `x:num` `3`));;
+
+map graph (take 10 (gg empty_inst));;
+
+let nats_from : term -> num -> goal =
+  fun tm ->
+    let rec nats n =
+      fun i ->
+        disj (unify tm (mk_numeral n))
+             (nats (succ_num n)) i in
+    nats;;
+
+map graph (take 10 (nats_from `x:num` num_2 empty_inst));;

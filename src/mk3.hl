@@ -10,50 +10,46 @@ type inst = (term, term) func;;
 
 let empty_inst : inst = undefined;;
 
-type chain = unit -> unit;;
-
-exception Stop;;
+type chain = unit -> inst;;
 
 exception Choice of inst * chain;;
 
-let empty : chain = fun () -> raise Stop;;
+let empty : chain = fun () -> failwith "End of chain";;
 
-let yield i : chain = fun () -> raise (Choice (i, empty));;
+let yield i : chain = fun () -> i;;
 
 let rec const i : chain =
   fun () -> raise (Choice (i, const i));;
 
-let rec sequential (k1:chain) (k2:unit -> chain) : chain =
+let rec sequential (k1:chain) (k2:unit->chain) : chain =
   fun () ->
-    try k1 (); failwith "Invalid chain" with
-      Stop -> k2 () ()
-    | Choice (i, k) -> raise (Choice (i, sequential k k2));;
+    match
+      try Some (k1 ()) with
+        Failure _ -> None
+      | Choice (i, k) -> raise (Choice (i, sequential k k2))
+    with
+      None -> k2 () ()
+    | Some i -> raise (Choice (i, k2 ()));;
 
 let rec bind (k:chain) (f:inst->chain) : chain =
-  fun () ->
-    try k (); failwith "Invalid chain" with
-      Stop -> raise Stop
-    | Choice (i, k') -> sequential (f i) (fun () -> bind k' f) ();;
+  try f (k ())
+  with Choice (i, k') -> sequential (f i) (fun () -> bind k' f);;
 
-let rec mplusf (k1:chain) (k2:unit -> chain) : chain =
+let rec mplusf (k1:chain) (k2:unit->chain) : chain =
   fun () ->
-    try k1 (); failwith "Invalid chain" with
-      Stop -> k2 () ()
-    | Choice (i, k) ->
-        raise (Choice (i, mplusf (k2 ()) (fun () -> k)));;
+    match
+      try Some (k1 ()) with
+        Failure _ -> None
+      | Choice (i, k) -> raise (Choice (i, mplusf (k2 ()) (fun () -> k)))
+    with
+      None -> k2 () ()
+    | Some i -> raise (Choice (i, k2 ()));;
 
 let rec bindi (k:chain) (f:inst->chain) : chain =
-  fun () ->
-    try k (); failwith "Invalid chain" with
-      Stop -> raise Stop
-    | Choice (i, k') -> mplusf (f i) (fun () -> bindi k' f) ();;
+  try f (k ())
+  with Choice (i, k') -> mplusf (f i) (fun () -> bindi k' f);;
 
-let rec bindi (k:chain) (f:inst->chain) : chain =
-  try k (); failwith "Invalid chain" with
-    Stop -> raise Stop
-  | Choice (i, k') -> mplusf (f i) (fun () -> bindi k' f);;
-
-let chain_map f c = bind c (yield o f);;
+let chain_map f c = bind c (yield o f);; 
 
 let cons i k = raise (Choice (i, k));;
 
@@ -63,9 +59,7 @@ let rec chain_of_list =
   | h :: t -> cons h (fun () -> chain_of_list t ());;
 
 let peel (k:chain) : inst * chain =
-  try k (); empty_inst,empty with
-    Stop -> failwith "head"
-  | Choice (i,k) -> i,k;;
+  try k (), empty with Choice (i,k) -> i,k;;
 
 let head k = fst (peel k);;
 let tail k = snd (peel k);;
@@ -82,46 +76,6 @@ let rec take n k =
 let on_numeral f = mk_small_numeral o f o dest_small_numeral;;
 
 let numeral_succ = on_numeral succ;;
-
-(*
-let rec nats n () = cons (mk_small_numeral n) (nats (n+1)) ();;
-
-take 10 (const `0`);;
-
-let example = chain_of_list (map mk_small_numeral (0--10));;
-
-take 3 example;;
-
-let three_nums n = chain_of_list (map mk_small_numeral (n--(n+2)));;
-
-take 10 (end_itlist sequential (map three_nums (0--10)));;
-take 10 (end_itlist mplus      (map three_nums (0--10)));;
-
-take 10 (bind  example yield);;
-take 10 (bindi example yield);;
-take 10 (bind  example (fun tm -> chain_of_list [tm; numeral_succ tm]));;
-take 10 (bindi example (fun tm -> chain_of_list [tm; numeral_succ tm]));;
-
-take 10 (bind  example (fun tm -> chain_of_list [tm; tm; numeral_succ tm]));;
-take 10 (bindi example (fun tm -> chain_of_list [tm; tm; numeral_succ tm]));;
-
-take 10 (bind  example (fun tm -> nats (2 * dest_small_numeral tm)));;
-take 10 (bindi example (fun tm -> nats (2 * dest_small_numeral tm)));;
-
-take 10 (chain_map numeral_succ example);;
-
-take 10 (nats 3);;
-
-let twos_and_zeros_test =
-  assert ([`2`; `0`; `2`; `0`; `2`; `0`; `2`; `0`; `2`; `0`] =
-  (take 10 (mplus (const `2`) (const `0`))));;
-
-let bind_test =
-  assert ([`2`; `4`; `2`; `6`; `2`; `4`; `2`; `8`; `2`; `4`; `2`; `6`;
-           `2`; `4`; `2`; `10`; `2`; `4`; `2`; `6`; `2`; `4`; `2`; `8`;
-           `2`; `4`; `2`; `6`; `2`; `4`] =
-          (take 30 (bindi (nats 1) (const o on_numeral (( * ) 2)))));;
-*)
 
 let fresh_var s v = variant (dom s) v;;
 
@@ -160,6 +114,8 @@ let disj (g1:goal) (g2:goal) : goal =
 let conj (g1:goal) (g2:goal) : goal =
   fun i -> bindi (g1 i) g2;;
 
+map graph (take 10 (conj (unify `x:num` `5`) (unify `y:num` `7`) empty_inst));;
+
 (* `p 1 2 \/ p 2 3 \/ p 2 4` *)
 let gg =
   fresh (fun x -> fresh (fun y ->
@@ -172,11 +128,7 @@ map graph (take 10 (gg empty_inst));;
 
 let gg = fresh (fun x -> fresh (fun y -> conj (unify y `5`) (unify x `1`)));;
 
-let gg = fresh (fun x -> disj (unify x `5`) (unify x `7`));;
-
-let gg = conj yield yield;;
-
-map graph (take 10 (gg empty_inst));;
+graph (hd (take 10 (gg empty_inst)));;
 
 (* ------------------------------------------------------------------------- *)
 (* Goal with natural numbers.                                                *)
@@ -191,7 +143,7 @@ let nats_from (tm:term) : num -> goal =
   let rec nats n =
     fun i ->
       disj (unify tm (mk_numeral n))
-           (fun j -> nats (succ_num n) j) i in
+           (nats (succ_num n)) i in
   nats;;
 
 map graph (take 10 (nats_from `x:num` num_2 empty_inst));;
