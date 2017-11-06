@@ -10,7 +10,9 @@ type inst = (term, term) func;;
 
 let empty_inst : inst = undefined;;
 
-type chain = unit -> unit;;
+type none;;
+
+type chain = unit -> none;;
 
 exception Stop;;
 
@@ -20,38 +22,36 @@ let empty : chain = fun () -> raise Stop;;
 
 let yield i : chain = fun () -> raise (Choice (i, empty));;
 
+let call (k:chain) : unit -> 'a =
+  ignore(k ()); failwith "Invalid chain";;
+
 let rec const i : chain =
   fun () -> raise (Choice (i, const i));;
 
 let rec sequential (k1:chain) (k2:unit -> chain) : chain =
   fun () ->
-    try k1 (); failwith "Invalid chain" with
+    try call k1 () with
       Stop -> k2 () ()
     | Choice (i, k) -> raise (Choice (i, sequential k k2));;
 
 let rec bind (k:chain) (f:inst->chain) : chain =
   fun () ->
-    try k (); failwith "Invalid chain" with
+    try call k () with
       Stop -> raise Stop
     | Choice (i, k') -> sequential (f i) (fun () -> bind k' f) ();;
 
 let rec mplusf (k1:chain) (k2:unit -> chain) : chain =
   fun () ->
-    try k1 (); failwith "Invalid chain" with
+    try call k1 () with
       Stop -> k2 () ()
     | Choice (i, k) ->
         raise (Choice (i, mplusf (k2 ()) (fun () -> k)));;
 
 let rec bindi (k:chain) (f:inst->chain) : chain =
   fun () ->
-    try k (); failwith "Invalid chain" with
+    try call k () with
       Stop -> raise Stop
     | Choice (i, k') -> mplusf (f i) (fun () -> bindi k' f) ();;
-
-let rec bindi (k:chain) (f:inst->chain) : chain =
-  try k (); failwith "Invalid chain" with
-    Stop -> raise Stop
-  | Choice (i, k') -> mplusf (f i) (fun () -> bindi k' f);;
 
 let chain_map f c = bind c (yield o f);;
 
@@ -63,7 +63,7 @@ let rec chain_of_list =
   | h :: t -> cons h (fun () -> chain_of_list t ());;
 
 let peel (k:chain) : inst * chain =
-  try k (); empty_inst,empty with
+  try ignore (k ()); empty_inst,empty with
     Stop -> failwith "head"
   | Choice (i,k) -> i,k;;
 
