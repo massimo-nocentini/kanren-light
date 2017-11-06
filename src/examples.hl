@@ -277,6 +277,11 @@ kprove1(`META X. EVEN X`,
 
 kprove1(`META X. EVEN X /\ 3 <= X`,
   kthenl_ (TAC_KTAC CONJ_TAC)
+          [EVEN_KTAC;
+           ACCEPT_KTAC (ARITH_RULE `3 <= 4`)]);;
+
+kprove1(`META X. EVEN X /\ 3 <= X`,
+  kthenl_ (TAC_KTAC CONJ_TAC)
           [ACCEPT_KTAC (ARITH_RULE `EVEN 4`);
            ACCEPT_KTAC (ARITH_RULE `3 <= 4`)]);;
 

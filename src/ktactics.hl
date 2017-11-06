@@ -6,17 +6,49 @@
 (* Generalized, Kanren-like tactics.                                         *)
 (* ------------------------------------------------------------------------- *)
 
-exception Choice of goalstate * (unit -> goalstate);;
-
-type kgoal = term list * goal;;                     (* metavariables * goal *)
 type ktactic = kgoal -> goalstate;;
 
+type kgoal = term list * goal;;                     (* metavariables * goal *)
+
 type thm_ktactic = thm -> ktactic;;
+
+(*
+exception Choice of goalstate * (unit -> goalstate);;
+*)
+
+exception Choice of goalstate * ktactic;;
 
 let (inst_kgoal:instantiation->kgoal->kgoal) =
   fun p (mvs,g) ->
     let mvs' = intersect mvs (freesl (map (instantiate p) mvs)) in
     mvs',inst_goal p g;;
+
+(* ------------------------------------------------------------------------- *)
+(* Chain operators.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+(*
+let rec mplusf (k1:ktactic) (k2:unit -> ktactic) : ktactic =
+  fun goal ->
+    match
+      try Some (k1 goal) with
+        Failure _ -> None
+      | Choice (gs, k) ->
+          raise (Choice (gs, fun () -> mplusf (k2 ()) (fun () _ -> k ()) goal))
+    with
+      None -> k2 () goal
+    | Some gs -> raise (Choice (gs, fun () -> k2 () goal));;
+*)
+
+let rec mplus (k1:ktactic) (k2:ktactic) : ktactic =
+  fun goal ->
+    match
+      try Some (k1 goal) with
+        Failure _ -> None
+      | Choice (gs, k) -> raise (Choice (gs, fun goal -> mplus k2 k goal))
+    with
+      None -> k2 goal
+    | Some gs -> raise (Choice (gs, k2));;
 
 (* ------------------------------------------------------------------------- *)
 (* Modify the original printer for goals and goalstacs to print              *)
@@ -396,6 +428,8 @@ let (kthen_: ktactic -> ktactic -> ktactic) =
     ktacsequence gstate (replicate ktac2 (length gls));;
 *)
 
+(* Versioni naive con Choice: non fonde gli stream! *)
+(*
 let (kthenl_: ktactic -> ktactic list -> ktactic) =
   fun ktac1 ktac2l g ->
     let gstate =
@@ -415,6 +449,44 @@ let (kthen_: ktactic -> ktactic -> ktactic) =
           ktacsequence gstate (replicate ktac2 (length gls)) in
         raise (Choice (gstate', k')) in
     ktacsequence gstate (replicate ktac2 (length gls));;
+*)
+
+let (kthenl_: ktactic -> ktactic list -> ktactic) =
+  fun ktac1 ktac2l g ->
+    match
+      try Some (ktac1 g) with
+        Failure _ -> None
+      | Choice (gstate,k) ->
+          match
+            try Some (ktacsequence gstate ktac2l) with
+              Failure _ -> None
+            | Choice (gstate',k') ->
+                raise (Choice (gstate', fun g -> mplus k' k g))
+          with
+            None -> fail()
+          | Some gstate -> raise (Choice (gstate, k))
+    with
+      None -> fail ()
+    | Some gstate -> ktacsequence gstate ktac2l;;
+
+let (kthen_: ktactic -> ktactic -> ktactic) =
+  fun ktac1 ktac2 g ->
+    match
+      try Some (ktac1 g) with
+        Failure _ -> None
+      | Choice (_,gls,_ as gstate,k) ->
+          match
+            try Some (ktacsequence gstate (replicate ktac2 (length gls))) with
+              Failure _ -> None
+            | Choice (gstate',k') ->
+                raise (Choice (gstate', fun g -> mplus k' k g))
+          with
+            None -> fail()
+          | Some gstate -> raise (Choice (gstate,k))
+    with
+      None -> fail()
+    | Some (_,gls,_ as gstate) ->
+        ktacsequence gstate (replicate ktac2 (length gls));;
 
 (*
 let (THEN),(THENL) =
@@ -427,23 +499,25 @@ let (THEN),(THENL) =
 
 let (korelse_: ktactic -> ktactic -> ktactic) =
   fun ktac1 ktac2 g ->
-    try raise (Choice(ktac1 g,fun () -> ktac2 g)) with Failure _ -> ktac2 g;;
+    try raise (Choice(ktac1 g,ktac2)) with Failure _ -> ktac2 g;;
 
 let CUT_KTAC : ktactic -> ktactic =
   fun ktac g ->
     try ktac g with Choice (g,_) -> g;;
 
-let rec next_choice (k:unit -> goalstate) : (unit -> goalstate) =
-  try ignore (k ()); failwith "next_choices" with Choice (_, k) -> k;;
+let rec next_choice (k:ktactic) : ktactic =
+  fun goal ->
+    try ignore (k goal); failwith "next_choices"
+    with Choice (_, k) -> k goal;;
 
-let rec drop_choices n (k:unit -> goalstate) : (unit -> goalstate) =
+let rec drop_choices n (k:ktactic) : ktactic =
   if n = 0 then k else drop_choices (n - 1) (next_choice k);;
 
 let rec DROP_KTAC : int -> ktactic -> ktactic =
   fun n ktac g ->
     if n = 0 then ktac g else
     try ignore (ktac g); failwith "DROP_KTAC"
-    with Choice (_, k) -> drop_choices (n - 1) k ();;
+    with Choice (_, k) -> drop_choices (n - 1) k g;;
 
 let (FAIL_KTAC: string -> ktactic) =
   fun tok g -> failwith tok;;
@@ -564,7 +638,6 @@ let (kby1:ktactic->refinement) =
       just i sths in
     (union newmvs omvs,inst'),gls',just';;
 
-
 let (kbyk:ktactic->refinement) =
   fun ktac ((mvs,inst),gls,just) ->
     if gls = [] then failwith "No goal set" else
@@ -583,8 +656,8 @@ let (kbyk:ktactic->refinement) =
             let sths = subjust i cths :: oths in
             just i sths in
           (union newmvs omvs,inst'),gls',just' in
-        let k' () =
-          let ((newmvs,newinst),subgls,subjust) = k () in
+        let k' g =
+          let ((newmvs,newinst),subgls,subjust) = k g in
           let n = length subgls in
           let okgls = map (curry (inst_kgoal newinst) mvs) ogls in
           let omvs = unions (map fst okgls) in
