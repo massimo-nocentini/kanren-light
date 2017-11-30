@@ -1,4 +1,15 @@
 (* ------------------------------------------------------------------------- *)
+(* Tools.                                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let do_fail f x =
+  if (try f x; false with Failure _ -> true)
+  then report "do_fail: Ok, it fails."
+  else failwith "do_fail: Do not fail.";;
+
+let ke1 (ktac:ktactic) : goalstack = refine(kby1(KVALID ktac));;
+
+(* ------------------------------------------------------------------------- *)
 (* Experiments with REFL_KTAC.                                               *)
 (* ------------------------------------------------------------------------- *)
 
@@ -11,10 +22,9 @@ ktop_thm();;
 (* Same with TAC_KTAC REFL_TAC : Fails! *)
 set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;
 p();;
-ke (TAC_KTAC REFL_TAC);;
-ktop_thm();;
+do_fail ke (TAC_KTAC REFL_TAC);;
 
-(* Example 2 *)
+(* Example 2 : use of sharing. *)
 set_kanren_goal `META A B C. [A;C;2] = [0;A;B]`;;
 p();;
 ke REFL_KTAC;;
@@ -22,17 +32,16 @@ ktop_thm();;
 
 (* ------------------------------------------------------------------------- *)
 (* How to break the invariant!                                               *)
+(* Test for KVALID.                                                          *)
 (* ------------------------------------------------------------------------- *)
 
-(*;;
 set_kanren_goal
   `META X:A.
      (!Y:A. ancestor Y pluto)
      ENTAILS
      ancestor pippo X`;;
 p ();;
-ke WRONG_KTAC;;
-*)
+do_fail ke WRONG_KTAC;;
 
 (* ------------------------------------------------------------------------- *)
 (* Our favorite example: angestor and all that...                            *)
@@ -47,15 +56,14 @@ p ();;
 ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
 
-(* Fails! *)
+(* Fails! (ACCEPT_TAC do not use unification.) *)
 set_kanren_goal
   `META X:A.
      (!Y:A. ancestor Y pluto)
      ENTAILS
      ancestor pippo X`;;
 p ();;
-ke (FIRST_ASSUM_KTAC (fun tm -> TAC_KTAC (ACCEPT_TAC tm)));;
-ktop_thm();;
+do_fail ke (FIRST_ASSUM_KTAC (fun tm -> TAC_KTAC (ACCEPT_TAC tm)));;
 
 set_kanren_goal
   `META X:A.
@@ -68,25 +76,59 @@ set_kanren_goal
 let cg = !current_goalstack;;
 p();;
 
-(* -2 : funziona! *)
+(* -2 : funziona! Non crea meta. *)
 ke (TAC_KTAC (MATCH_MP_TAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`)));;
 
-(* -1 : funziona! *)
+(* -1 : funziona! Crea una nuova meta per Y. *)
 current_goalstack := cg; p();;
 ke (MP_KTAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`));;
 
-(* 0 : funziona! *)
+(* -3/4 : funziona! Test di kthen_*)
 current_goalstack := cg; p();;
-ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC));;
-ke (trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
-ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
+try ke (FIRST_ASSUM_KTAC MP_KTAC); failwith "Should not reach this point" with
+  Choice (gs, ktac) -> (current_goalstack := cg; ke ktac);;
+
+(* -1/2 : funziona! Test di kthen_*)
+current_goalstack := cg; p();;
+ke (CUT_KTAC (FIRST_ASSUM_KTAC MP_KTAC));;
+
+(* -1/4 : funziona! Test di kthen_*)
+current_goalstack := cg; p();;
+ke1 (FIRST_ASSUM_KTAC MP_KTAC);;
+
+(* 0 : funziona! Test di kthen_*)
+current_goalstack := cg; p();;
+ke1 (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC));;
+ke1 (trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
+ke1 (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
+
+(* 1/4 : Ok, dà MK_KTAC: Wrong theorem *)
+current_goalstack := cg; p();;
+try ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+               (TAC_KTAC CONJ_TAC));
+    failwith "Should not reach this point"
+with Choice (_, ktac) -> (current_goalstack := cg; ke ktac);;
+
+(* 1/2 : Dovrebbe dare MK_KTAC: Wrong theorem *)
+current_goalstack := cg; p();;
+try ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+               (kthen_ (TAC_KTAC CONJ_TAC)
+                       (CUT_KTAC (FIRST_ASSUM_KTAC ACCEPT_KTAC))));
+    failwith "Should not reach this point"
+with Choice (_, ktac) -> (current_goalstack := cg; ke ktac);;
 
 (* 1 : funziona! *)
 current_goalstack := cg; p();;
-ke (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-           (kthen_ (TAC_KTAC CONJ_TAC)
-                   (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+ke1 (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+            (kthen_ (TAC_KTAC CONJ_TAC)
+                    (CUT_KTAC (FIRST_ASSUM_KTAC ACCEPT_KTAC))));;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke1 (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+            (kthen_ (TAC_KTAC CONJ_TAC)
+                    (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
 ktop_thm();;
 
 (* 2 : funziona! *)
@@ -102,6 +144,8 @@ kprove1
                  (TAC_KTAC CONJ_TAC))
          (CUT_KTAC (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC))));;
 
+(* NON FUNZIONA! Generated wrong theorem. *)
+
 kprove1
  (`META X:A.
      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
@@ -115,20 +159,30 @@ kprove1
 
 kprove1
  (`META X:A.
-     (!X. ancestor X X) AND
      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
      ancestor pippo pluto AND
      ancestor pluto paperino
      ENTAILS
      ancestor pippo X`,
-  kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                 (TAC_KTAC CONJ_TAC))
-         (CUT_KTAC (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+  kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+         (kthen_ (TAC_KTAC CONJ_TAC)
+                 (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC))));;
+
+kprove1
+ (`META X:A.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthenl_ (FIRST_ASSUM_KTAC MP_KTAC)
+          [kthenl_ (TAC_KTAC CONJ_TAC)
+                   [trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)]]);;
 
 (* 3 : funziona! *)
 current_goalstack := cg; p();;
-ke (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
-                    (TAC_KTAC CONJ_TAC))
+ke1 (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                     (TAC_KTAC CONJ_TAC))
             [FIRST_ASSUM_KTAC ACCEPT_KTAC;
              FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
 ktop_thm();;

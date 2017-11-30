@@ -6,9 +6,9 @@
 (* Generalized, Kanren-like tactics.                                         *)
 (* ------------------------------------------------------------------------- *)
 
-type ktactic = kgoal -> goalstate;;
-
 type kgoal = term list * goal;;                     (* metavariables * goal *)
+
+type ktactic = kgoal -> goalstate;;
 
 type thm_ktactic = thm -> ktactic;;
 
@@ -337,7 +337,8 @@ let (MP_KTAC : thm -> ktactic) =
   fun th (mvs,(asl,w)) ->
     let th = fresh_thm th in
     let avs,tm = strip_forall(concl th) in
-    let btm,htm = dest_imp tm in
+    let btm,htm = try dest_imp tm with Failure _ ->
+                  failwith "MK_KTAC: Wrong theorem" in
     let mvs' = union avs mvs in
     let inst1 = term_unify mvs' htm w in
     let mvs'',gl = inst_kgoal inst1 (mvs',(asl,btm)) in
@@ -479,7 +480,7 @@ let (kthen_: ktactic -> ktactic -> ktactic) =
             try Some (ktacsequence gstate (replicate ktac2 (length gls))) with
               Failure _ -> None
             | Choice (gstate',k') ->
-                raise (Choice (gstate', fun g -> mplus k' k g))
+                raise (Choice (gstate', fun g' -> mplus k k' g'))
           with
             None -> fail()
           | Some gstate -> raise (Choice (gstate,k))
@@ -715,6 +716,15 @@ let KTAC_PROOF1 (gstate : goalstate) (ktac:ktactic) : instantiation * thm =
   if sgs <> [] then failwith "KTAC_PROOF: Unsolved goals" else
   inst,just inst [];;
 
+let print_instantiation (inst:instantiation) : unit =
+  let bl, tml, tyl = inst in
+  report "Betas:";
+  do_list (fun n,tm -> report (string_of_int n^" "^string_of_term tm)) bl;
+  report "Term eqs:";
+  do_list (fun t1,t2 -> report (string_of_term t1^" "^string_of_term t2)) tml;
+  report "Type eqs:";
+  do_list (fun t1,t2 -> report (string_of_type t1^" "^string_of_type t2)) tyl;;
+
 let (kprove1 : term * ktactic -> term list * thm) =
   let propagate_thm i [th] = INSTANTIATE_ALL i th in
   fun tm,ktac ->
@@ -728,9 +738,11 @@ let (kprove1 : term * ktactic -> term list * thm) =
       try EQ_MP (ALPHA t' (instantiate inst w)) th
       with Failure _ ->
         ( report "AIUTO!!!";
-          report (string_of_term t');
-          report (string_of_term (instantiate inst w));
-          report (string_of_thm th);
+          report ("Teorema dimostrato: "^string_of_thm th);
+          report ("Conclusione thm dimostrato: "^string_of_term t');
+          report ("Conclusione stm iniziale: "^string_of_term w);
+          report "Instanziazione:"; print_instantiation inst;
+          report ("Conclusione stm istanziata: "^string_of_term (instantiate inst w));
           failwith "kprove: tactic generated wrong theorem" ) in
     let eqs = map (fun v -> mk_eq(v,instantiate inst v)) mvs in
     eqs,th;;
