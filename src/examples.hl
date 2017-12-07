@@ -83,10 +83,13 @@ ke (TAC_KTAC (MATCH_MP_TAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> a
 current_goalstack := cg; p();;
 ke (MP_KTAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`));;
 
+(* -7/8 : funziona! Test di kthen_*)
+current_goalstack := cg; p();;
+ke (FIRST_ASSUM_KTAC MP_KTAC);;
+
 (* -3/4 : funziona! Test di kthen_*)
 current_goalstack := cg; p();;
-try ke (FIRST_ASSUM_KTAC MP_KTAC); failwith "Should not reach this point" with
-  Choice (gs, ktac) -> (current_goalstack := cg; ke ktac);;
+ke1 (FIRST_ASSUM_KTAC MP_KTAC);;
 
 (* -1/2 : funziona! Test di kthen_*)
 current_goalstack := cg; p();;
@@ -94,7 +97,8 @@ ke (CUT_KTAC (FIRST_ASSUM_KTAC MP_KTAC));;
 
 (* -1/4 : funziona! Test di kthen_*)
 current_goalstack := cg; p();;
-ke1 (FIRST_ASSUM_KTAC MP_KTAC);;
+try ke (FIRST_ASSUM_KTAC MP_KTAC); failwith "Should not reach this point" with
+  Choice (gs, ktac) -> (current_goalstack := cg; ke ktac);;
 
 (* 0 : funziona! Test di kthen_*)
 current_goalstack := cg; p();;
@@ -169,6 +173,17 @@ kprove1
                  (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC))));;
 
 kprove1
+ (`META X.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor 1 2 AND
+     ancestor 2 3
+     ENTAILS
+     ancestor 1 X`,
+  kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+         (kthen_ (TAC_KTAC CONJ_TAC)
+                 (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC))));;
+
+kprove1
  (`META X:A.
      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
      ancestor pippo pluto AND
@@ -179,13 +194,30 @@ kprove1
           [kthenl_ (TAC_KTAC CONJ_TAC)
                    [trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)]]);;
 
-(* 3 : funziona! *)
+set_kanren_goal `META X:A.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`;;
+ke1 (kthenl_ (FIRST_ASSUM_KTAC MP_KTAC)
+          [kthenl_ (TAC_KTAC CONJ_TAC)
+                   [trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)]]);;
+ktop_thm();;
+
+(* 3 : Sembra funzionare, ma non funziona, ktop_thm non fa il check di
+   consistenza che invece fa kprove. *)
 current_goalstack := cg; p();;
 ke1 (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
                      (TAC_KTAC CONJ_TAC))
             [FIRST_ASSUM_KTAC ACCEPT_KTAC;
              FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
 ktop_thm();;
+
+(* ========================================================================= *)
+(* HIC SUNT LEONES!!                                                         *)
+(* ========================================================================= *)
+
 
 (* ------------------------------------------------------------------------- *)
 (* Tentativi ingenui di creare una tattica prolog.  Non può funzionare in    *)

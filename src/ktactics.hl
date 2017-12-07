@@ -2,6 +2,8 @@
 (* Adapt the HOL Light tactic mechanism to a Kanren-like framework.          *)
 (* ========================================================================= *)
 
+type 'a error = Error of string | Ok of 'a;;
+
 (* ------------------------------------------------------------------------- *)
 (* Generalized, Kanren-like tactics.                                         *)
 (* ------------------------------------------------------------------------- *)
@@ -31,24 +33,24 @@ let (inst_kgoal:instantiation->kgoal->kgoal) =
 let rec mplusf (k1:ktactic) (k2:unit -> ktactic) : ktactic =
   fun goal ->
     match
-      try Some (k1 goal) with
-        Failure _ -> None
+      try Ok (k1 goal) with
+        Failure _ -> Error ""
       | Choice (gs, k) ->
           raise (Choice (gs, fun () -> mplusf (k2 ()) (fun () _ -> k ()) goal))
     with
-      None -> k2 () goal
-    | Some gs -> raise (Choice (gs, fun () -> k2 () goal));;
+      Error _ -> k2 () goal
+    | Ok gs -> raise (Choice (gs, fun () -> k2 () goal));;
 *)
 
 let rec mplus (k1:ktactic) (k2:ktactic) : ktactic =
   fun goal ->
     match
-      try Some (k1 goal) with
-        Failure _ -> None
-      | Choice (gs, k) -> raise (Choice (gs, fun goal -> mplus k2 k goal))
+      try Ok (k1 goal) with
+        Failure s -> Error s
+      | Choice (gs, k) -> raise (Choice (gs, fun goal' -> mplus k2 k goal))
     with
-      None -> k2 goal
-    | Some gs -> raise (Choice (gs, k2));;
+      Error _ -> k2 goal
+    | Ok gs -> raise (Choice (gs, k2));;
 
 (* ------------------------------------------------------------------------- *)
 (* Modify the original printer for goals and goalstacs to print              *)
@@ -452,41 +454,65 @@ let (kthen_: ktactic -> ktactic -> ktactic) =
     ktacsequence gstate (replicate ktac2 (length gls));;
 *)
 
+(* Versione sbagliata! Fa ripartire k con il goal g' invece che g! *)
+(*
 let (kthenl_: ktactic -> ktactic list -> ktactic) =
   fun ktac1 ktac2l g ->
     match
-      try Some (ktac1 g) with
-        Failure _ -> None
+      try Ok (ktac1 g) with
+        Failure s -> Error s
       | Choice (gstate,k) ->
           match
-            try Some (ktacsequence gstate ktac2l) with
-              Failure _ -> None
+            try Ok (ktacsequence gstate ktac2l) with
+              Failure _ -> Error ""
             | Choice (gstate',k') ->
                 raise (Choice (gstate', fun g -> mplus k' k g))
           with
-            None -> fail()
-          | Some gstate -> raise (Choice (gstate, k))
+            Error s -> failwith s
+          | Ok gstate -> raise (Choice (gstate, k))
     with
-      None -> fail ()
-    | Some gstate -> ktacsequence gstate ktac2l;;
+      Error s -> failwith s
+    | Ok gstate -> ktacsequence gstate ktac2l;;
+*)
+
+(* Quick and dirty fix: usa (fun _ -> k g) al posto di k. *)
+let (kthenl_: ktactic -> ktactic list -> ktactic) =
+  fun ktac1 ktac2l g ->
+    match
+      try Ok (ktac1 g) with
+        Failure s -> Error s
+      | Choice (gstate,k) ->
+          let k = fun _ -> k g in
+          match
+            try Ok (ktacsequence gstate ktac2l) with
+              Failure s -> Error s
+            | Choice (gstate',k') ->
+                raise (Choice (gstate', fun g' -> mplus k' k g'))
+          with
+            Error s -> failwith s
+          | Ok gstate -> raise (Choice (gstate, k))
+    with
+      Error s -> failwith s
+    | Ok gstate -> ktacsequence gstate ktac2l;;
 
 let (kthen_: ktactic -> ktactic -> ktactic) =
   fun ktac1 ktac2 g ->
     match
-      try Some (ktac1 g) with
-        Failure _ -> None
+      try Ok (ktac1 g) with
+        Failure s -> Error s
       | Choice (_,gls,_ as gstate,k) ->
+          let k = fun _ -> k g in
           match
-            try Some (ktacsequence gstate (replicate ktac2 (length gls))) with
-              Failure _ -> None
+            try Ok (ktacsequence gstate (replicate ktac2 (length gls))) with
+              Failure s -> Error s
             | Choice (gstate',k') ->
                 raise (Choice (gstate', fun g' -> mplus k k' g'))
           with
-            None -> fail()
-          | Some gstate -> raise (Choice (gstate,k))
+            Error s -> failwith s
+          | Ok gstate -> raise (Choice (gstate,k))
     with
-      None -> fail()
-    | Some (_,gls,_ as gstate) ->
+      Error s -> failwith s
+    | Ok (_,gls,_ as gstate) ->
         ktacsequence gstate (replicate ktac2 (length gls));;
 
 (*
