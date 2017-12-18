@@ -18,6 +18,9 @@ kg `META A B. [A;1;2] = [0;1;B]`;;
 ke REFL_KTAC;;
 ktop_thm();;
 
+(* Composizione finale di verifica. *)
+kprove1(`META A B. [A;1;2] = [0;1;B]`, REFL_KTAC);;
+
 (* Same with TAC_KTAC REFL_TAC : Fails! *)
 kg `META A B. [A;1;2] = [0;1;B]`;;
 do_fail ke (TAC_KTAC REFL_TAC);;
@@ -26,6 +29,9 @@ do_fail ke (TAC_KTAC REFL_TAC);;
 kg `META A B C. [A;C;2] = [0;A;B]`;;
 ke REFL_KTAC;;
 ktop_thm();;
+
+(* Composizione finale di verifica. *)
+kprove1(`META A B C. [A;C;2] = [0;A;B]`,REFL_KTAC);;
 
 (* ------------------------------------------------------------------------- *)
 (* How to break the invariant!                                               *)
@@ -48,6 +54,13 @@ kg `META X:A.
       ancestor pippo X`;;
 ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
+
+kprove1
+ (`META X:A.
+      (!Y:A. ancestor Y pluto)
+      ENTAILS
+      ancestor pippo X`,
+  FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 
 (* Fails! (ACCEPT_TAC do not use unification.) *)
 kg `META X:A.
@@ -92,9 +105,21 @@ try ke (FIRST_ASSUM_KTAC MP_KTAC); failwith "Should not reach this point" with
 (* 0 : funziona! Test di kthen_*)
 current_goalstack := cg; p();;
 ke1 (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC));;
-ke1 (trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
+ke1 (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ke1 (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
+
+kprove1
+ (`META X:A.
+      (!X. ancestor X X) AND
+      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+      ancestor pippo pluto AND
+      ancestor pluto paperino
+      ENTAILS
+      ancestor pippo X`,
+  kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC))
+          [trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC);
+           FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
 
 (* 1/4 : Ok, dà MK_KTAC: Wrong theorem *)
 current_goalstack := cg; p();;

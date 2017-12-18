@@ -102,14 +102,18 @@ let (print_kgoal : kgoal->unit) =
 
 let (print_goalstack:goalstack->unit) =
   let print_goalstate k gs =
-    let ((mvs,_),gl,_) = gs in
+    let ((mvs,inst),gl,_) = gs in
+    let linst = map (fun v -> mk_eq(v,instantiate inst v)) mvs in
     let n = length gl in
     let s = if n = 0 then "No subgoals" else
               (string_of_int k)^" subgoal"^(if k > 1 then "s" else "")
            ^" ("^(string_of_int n)^" total)" in
     Format.print_string s; Format.print_newline();
     if gl = [] then () else
-    do_list (curry print_kgoal mvs o C el gl) (rev(0--(k-1))) in
+    do_list (curry print_kgoal mvs o C el gl) (rev(0--(k-1)));
+    Format.print_newline();
+    Format.print_string "Current instantiation:"; Format.print_newline();
+    do_list (fun eqtm -> print_term eqtm; Format.print_newline()) linst in
   fun l ->
     if l = [] then Format.print_string "Empty goalstack"
     else if tl l = [] then
@@ -305,14 +309,15 @@ fresh_thm it;;
 
 let ACCEPT_KTAC : thm_ktactic =
   let propagate_thm th i [] = INSTANTIATE_ALL i th in
-  fun th (mvs,(asl,w)) ->
+  fun th ->
     let th = fresh_thm th in
-    let avs = fst (strip_forall (concl th))
-    and th = SPEC_ALL th in
-    let insts = term_unify (union avs mvs) (concl th) w in
-    let th' = INSTANTIATE insts th in
-    let insts' = term_unify mvs (concl th') w in
-    ([],insts'),[],propagate_thm th';;
+    fun mvs,(asl,w) ->
+      let avs = fst (strip_forall (concl th))
+      and th = SPEC_ALL th in
+      let insts = term_unify (union avs mvs) (concl th) w in
+      let th' = INSTANTIATE insts th in
+      let insts' = term_unify mvs (concl th') w in
+      ([],insts'),[],propagate_thm th';;
 
 let propagate_mp rth i [th] =
   MP (INSTANTIATE_ALL i rth) th;;
@@ -349,18 +354,19 @@ let (MP_KTAC : thm -> ktactic) =
 (* ------------------------------------------------------------------------- *)
 
 let (MP_KTAC : thm -> ktactic) =
-  fun th (mvs,(asl,w)) ->
+  fun th ->
     let th = fresh_thm th in
-    let avs,tm = strip_forall(concl th) in
-    let btm,htm = try dest_imp tm with Failure _ ->
-                  failwith "MK_KTAC: Wrong theorem" in
-    let mvs' = union avs mvs in
-    let inst1 = term_unify mvs' htm w in
-    let mvs'',gl = inst_kgoal inst1 (mvs',(asl,btm)) in
-    let th' = INSTANTIATE_ALL inst1 (SPEC_ALL th) in
-    let htm' = rand(concl th') in
-    let inst = term_unify mvs w htm' in
-    (mvs'',inst),[gl],propagate_mp th';;
+    fun mvs,(asl,w) ->
+      let avs,tm = strip_forall(concl th) in
+      let btm,htm = try dest_imp tm with Failure _ ->
+                    failwith "MK_KTAC: Wrong theorem" in
+      let mvs' = union avs mvs in
+      let inst1 = term_unify mvs' htm w in
+      let mvs'',gl = inst_kgoal inst1 (mvs',(asl,btm)) in
+      let th' = INSTANTIATE_ALL inst1 (SPEC_ALL th) in
+      let htm' = rand(concl th') in
+      let inst = term_unify mvs w htm' in
+      (mvs'',inst),[gl],propagate_mp th';;
 
 (* ------------------------------------------------------------------------- *)
 (* Tactic composition.                                                       *)
