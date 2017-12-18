@@ -14,19 +14,16 @@ let ke1 (ktac:ktactic) : goalstack = refine(kby1(KVALID ktac));;
 (* ------------------------------------------------------------------------- *)
 
 (* Example 1 *)
-set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;
-p();;
+kg `META A B. [A;1;2] = [0;1;B]`;;
 ke REFL_KTAC;;
 ktop_thm();;
 
 (* Same with TAC_KTAC REFL_TAC : Fails! *)
-set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;
-p();;
+kg `META A B. [A;1;2] = [0;1;B]`;;
 do_fail ke (TAC_KTAC REFL_TAC);;
 
 (* Example 2 : use of sharing. *)
-set_kanren_goal `META A B C. [A;C;2] = [0;A;B]`;;
-p();;
+kg `META A B C. [A;C;2] = [0;A;B]`;;
 ke REFL_KTAC;;
 ktop_thm();;
 
@@ -35,46 +32,38 @@ ktop_thm();;
 (* Test for KVALID.                                                          *)
 (* ------------------------------------------------------------------------- *)
 
-set_kanren_goal
-  `META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`;;
-p ();;
+kg `META X:A.
+      (!Y:A. ancestor Y pluto)
+      ENTAILS
+      ancestor pippo X`;;
 do_fail ke WRONG_KTAC;;
 
 (* ------------------------------------------------------------------------- *)
 (* Our favorite example: angestor and all that...                            *)
 (* ------------------------------------------------------------------------- *)
 
-set_kanren_goal
-  `META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`;;
-p ();;
+kg `META X:A.
+      (!Y:A. ancestor Y pluto)
+      ENTAILS
+      ancestor pippo X`;;
 ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
 
 (* Fails! (ACCEPT_TAC do not use unification.) *)
-set_kanren_goal
-  `META X:A.
-     (!Y:A. ancestor Y pluto)
-     ENTAILS
-     ancestor pippo X`;;
-p ();;
+kg `META X:A.
+      (!Y:A. ancestor Y pluto)
+      ENTAILS
+      ancestor pippo X`;;
 do_fail ke (FIRST_ASSUM_KTAC (fun tm -> TAC_KTAC (ACCEPT_TAC tm)));;
 
-set_kanren_goal
-  `META X:A.
-     (!X. ancestor X X) AND
-     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
-     ancestor pippo pluto AND
-     ancestor pluto paperino
-     ENTAILS
-     ancestor pippo X`;;
+kg `META X:A.
+      (!X. ancestor X X) AND
+      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+      ancestor pippo pluto AND
+      ancestor pluto paperino
+      ENTAILS
+      ancestor pippo X`;;
 let cg = !current_goalstack;;
-p();;
 
 (* -2 : funziona! Non crea meta. *)
 ke (TAC_KTAC (MATCH_MP_TAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`)));;
@@ -194,7 +183,7 @@ kprove1
           [kthenl_ (TAC_KTAC CONJ_TAC)
                    [trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)]]);;
 
-set_kanren_goal `META X:A.
+kg `META X:A.
      (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
      ancestor pippo pluto AND
      ancestor pluto paperino
@@ -241,7 +230,7 @@ let PROLOG_KTAC:ktactic =
     (kthen_ (FIRST_ASSUM_KTAC APPLY_KTAC)
             (TAC_KTAC (REPEAT CONJ_TAC)));;
 
-set_kanren_goal
+kg
   `(!X Y Z:A. l X Y /\ q Y Z ==> q X Z) AND
    (!X:A. q X X) AND
    (!X Y. l X Y ==> l Y X) AND
@@ -314,7 +303,7 @@ let PARENT_RULES,PARENT_INDUCT,PARENT_CASES = new_inductive_definition
 
 let PARENT_1,PARENT_2 = CONJ_PAIR PARENT_RULES;;
 
-set_kanren_goal
+kg
   `META X:num. RTC PARENT 42 X`;;
 ke(MP_KTAC (ISPEC `PARENT` RTC_TRANS));;
 ke (TAC_KTAC CONJ_TAC);;
@@ -341,7 +330,7 @@ let EVEN_KTAC : ktactic = even_ktac num_0;;
 
 let EVEN0,EVEN2 = CONJ_PAIR (ARITH_RULE `EVEN 0 /\ EVEN 2`);;
 
-set_kanren_goal `META X. EVEN X`;;
+kg `META X. EVEN X`;;
 let myk = ref (fun () -> hd(!current_goalstack));;
 let k = 
 try
@@ -377,7 +366,7 @@ kprove1(`META X. EVEN X /\ 3 <= X`,
                     (ACCEPT_KTAC (ARITH_RULE `EVEN 4`));
            ACCEPT_KTAC (ARITH_RULE `3 <= 4`)]);;
 
-set_kanren_goal `META X. EVEN X /\ 3 <= X`;;
+kg `META X. EVEN X /\ 3 <= X`;;
 ke (kthenl_ (TAC_KTAC CONJ_TAC)
             [korelse_ (ACCEPT_KTAC (ARITH_RULE `EVEN 2`))
                       (ACCEPT_KTAC (ARITH_RULE `EVEN 4`));

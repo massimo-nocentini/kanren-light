@@ -174,12 +174,26 @@ dest_kanren_goal
      fives X`;;
 *)
 
+(*
 let set_kanren_goal =
   let propagate_thm i [th] = INSTANTIATE_ALL i th in
   fun tm ->
     let mvars,(tml,w) = dest_kanren_goal tm in
     let asl = map (fun th -> "",ASSUME th) tml in
-    current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];;
+    current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];
+    !current_goalstack;;
+*)
+
+let set_kanren_goal =
+  let propagate_thm i [th] = INSTANTIATE_ALL i th in
+  fun (mvars,tml,w) ->
+    let asl = map (fun tm -> "",ASSUME tm) tml in
+    current_goalstack := [(mvars,null_inst),[asl,w],propagate_thm];
+    !current_goalstack;;
+
+let kg tm =
+  let mvars,(tml,w) = dest_kanren_goal tm in
+  set_kanren_goal(mvars,tml,w);;
 
 (* ------------------------------------------------------------------------- *)
 (* Debug tools.                                                              *)
@@ -233,8 +247,7 @@ let REFL_KTAC : ktactic =
 (* ------------------------------------------------------------------------- *)
 (* Example: Difference between TAC_KTAC REFL_TAC and REFL_KTAC:              *)
 (*                                                                           *)
-(* set_kanren_goal `META A B. [A;1;2] = [0;1;B]`;;                           *)
-(* p();;                                                                     *)
+(* kg `META A B. [A;1;2] = [0;1;B]`;;                                        *)
 (* ke (TAC_KTAC REFL_TAC);;                                                  *)
 (* ke REFL_KTAC;;                                                            *)
 (* ktop_thm();;                                                              *)
