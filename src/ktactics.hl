@@ -8,6 +8,14 @@ type 'a error = Error of string | Ok of 'a;;
 (* Generalized, Kanren-like tactics.                                         *)
 (* ------------------------------------------------------------------------- *)
 
+(* ------------------------------------------------------------------------- *)
+(* The goalstate stores the subgoals, justification, current instantiation,  *)
+(* and a list of metavariables.                                              *)
+(* ------------------------------------------------------------------------- *)
+(*
+type goalstate = (term list * instantiation) * goal list * justification;;
+*)
+
 type kgoal = term list * goal;;                     (* metavariables * goal *)
 
 type ktactic = kgoal -> goalstate;;
@@ -129,6 +137,9 @@ let (print_goalstack:goalstack->unit) =
 #install_printer print_goal;;
 #install_printer print_goalstack;;
 
+let print_metas (mvs,inst) =
+  do_list (fun v -> print_term(mk_eq(v,instantiate inst v))) mvs;;
+
 (* ------------------------------------------------------------------------- *)
 (* top_thm done right!                                                       *)
 (* ------------------------------------------------------------------------- *)
@@ -136,7 +147,9 @@ let (print_goalstack:goalstack->unit) =
 let ktop_thm() =
   match !current_goalstack with
     [] -> failwith "ktop_thm: empty goalstack"
-  | ((_,inst),[],f)::_ -> f inst []
+  | ((mvs,inst),[],f)::_ ->
+       let eqsubst v = mk_eq(v,instantiate inst v) in
+       end_itlist (curry mk_conj) (map eqsubst mvs), f inst []
   | _ -> failwith "ktop_thm: proof not finished";;
 
 (* ------------------------------------------------------------------------- *)
@@ -246,7 +259,7 @@ let REFL_KTAC : ktactic =
     let ltm,rtm = dest_eq w in
     let inst = term_unify mvs ltm rtm in
     let th = REFL (instantiate inst ltm) in
-    ([],inst),[],propagate_thm th;;
+    (mvs,inst),[],propagate_thm th;;
 
 (* ------------------------------------------------------------------------- *)
 (* Example: Difference between TAC_KTAC REFL_TAC and REFL_KTAC:              *)
@@ -307,7 +320,8 @@ fresh_thm it;;
 (* metavariabili.                                                            *)
 (* ------------------------------------------------------------------------- *)
 
-let ACCEPT_KTAC : thm_ktactic =
+(*
+let ACCEPT_KTAC_OLD : thm_ktactic =
   let propagate_thm th i [] = INSTANTIATE_ALL i th in
   fun th ->
     let th = fresh_thm th in
@@ -318,9 +332,25 @@ let ACCEPT_KTAC : thm_ktactic =
       let th' = INSTANTIATE insts th in
       let insts' = term_unify mvs (concl th') w in
       ([],insts'),[],propagate_thm th';;
+*)
 
-let propagate_mp rth i [th] =
-  MP (INSTANTIATE_ALL i rth) th;;
+let ACCEPT_KTAC : thm_ktactic =
+  let propagate_thm th i [] = INSTANTIATE_ALL i th in
+  fun th ->
+    let th = fresh_thm th in
+    let avs = fst (strip_forall (concl th))
+    and th = SPEC_ALL th in
+    fun mvs,(asl,w) ->
+      let insts = term_unify (union avs mvs) (concl th) w in
+      let th' = INSTANTIATE insts th in
+      let insts' = term_unify mvs w (concl th') in
+      let avs' = intersect avs (frees (concl th')) in
+      let mvs' = union avs' mvs in
+      (mvs',insts'),[],propagate_thm th';;
+
+let propagate_mp rth i =
+  let i = INSTANTIATE_ALL i rth in
+  fun [th] = MP i th;;
 
 (* Instrumented version for debug. *)
 (*
