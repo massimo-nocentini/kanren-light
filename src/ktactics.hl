@@ -149,7 +149,10 @@ let ktop_thm() =
     [] -> failwith "ktop_thm: empty goalstack"
   | ((mvs,inst),[],f)::_ ->
        let eqsubst v = mk_eq(v,instantiate inst v) in
-       end_itlist (curry mk_conj) (map eqsubst mvs), f inst []
+       let meta_eqs =
+         if mvs = [] then `T` else
+         end_itlist (curry mk_conj) (map eqsubst mvs) in
+       meta_eqs, f inst []
   | _ -> failwith "ktop_thm: proof not finished";;
 
 (* ------------------------------------------------------------------------- *)
@@ -350,7 +353,7 @@ let ACCEPT_KTAC : thm_ktactic =
 
 let propagate_mp rth i =
   let i = INSTANTIATE_ALL i rth in
-  fun [th] = MP i th;;
+  fun [th] -> MP i th;;
 
 (* Instrumented version for debug. *)
 (*
@@ -404,6 +407,7 @@ let (MP_KTAC : thm -> ktactic) =
 
 let propagate_empty (i:instantiation) ([]:thm list) : thm list = [];;
 
+(* Copied verbatim from HOL_Light.  Added type annotations. *)
 let compose_justs
     (n:int)
     (just1:justification)
@@ -456,8 +460,7 @@ let (ktacsequence : goalstate -> ktactic list -> goalstate) =
       seqapply ktacl (map (fun g -> mvs1,g) gls1) in
     let just = justsequence just1 just2 insts2 in
     let inst = compose_insts insts1 insts2 in
-    let mvs = freesl (map (instantiate inst) (union mvs1 mvs2)) in
-    ((mvs,inst),gls2,just);;
+    ((mvs2,inst),gls2,just);;
 
 (* Version with redundant metas. *)
 (*

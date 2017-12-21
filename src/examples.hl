@@ -34,6 +34,68 @@ ktop_thm();;
 kprove1(`META A B C. [A;C;2] = [0;A;B]`,REFL_KTAC);;
 
 (* ------------------------------------------------------------------------- *)
+(* Experiments with ACCEPT_KTAC.                                             *)
+(* ------------------------------------------------------------------------- *)
+
+kg `META A. A = 2`;;
+ke (ACCEPT_KTAC (MESON [] `!x:num. x = x`));;
+ktop_thm();;
+
+kg `META A. 3 = 2 ENTAILS A = 2`;;
+ke (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
+ktop_thm();;
+
+(* ------------------------------------------------------------------------- *)
+(* Experiments with thenl_                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+kg `META A B. A = 2 /\ A = B`;;
+ke (TAC_KTAC CONJ_TAC);;
+ke REFL_KTAC;;
+ke REFL_KTAC;;
+ktop_thm();;
+
+kg `META A B. A = 2 /\ A = B`;;
+ke (kthenl_ (TAC_KTAC CONJ_TAC) [REFL_KTAC; REFL_KTAC]);;
+ktop_thm();;
+
+
+kg `META A. (!x y. p x y ==> r x) AND
+            p 1 1
+            ENTAILS
+            r A`;;
+ke (FIRST_ASSUM_KTAC MP_KTAC);;
+ke1 (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
+ktop_thm();;
+
+kprove1
+ (`META A. (!x y. p x y ==> r x) AND p 1 1 ENTAILS r A`,
+  kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
+
+kprove1
+ (`META A. (!x y. p x y ==> r x) AND p 1 1 ENTAILS r A`,
+  kthenl_ (FIRST_ASSUM_KTAC MP_KTAC)
+          [FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
+
+kprove1
+ (`META A. (!x y. p x y ==> r x) AND p 1 1 ENTAILS r A`,
+  kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+         (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
+
+kprove1
+ (`META A. (!x y. p x y ==> r x) AND p 1 1 ENTAILS r A`,
+  kthen_ (MP_KTAC (ASSUME `!x:num y:num. p x y ==> r x`))
+         (ACCEPT_KTAC (ASSUME `p 1 1:bool`)));;
+
+(* ------------------------------------------------------------------------- *)
+(* Experiments with then_                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+kg `META A B. A = 2 /\ A = B`;;
+ke (kthen_ (TAC_KTAC CONJ_TAC) REFL_KTAC);;
+ktop_thm();;
+
+(* ------------------------------------------------------------------------- *)
 (* How to break the invariant!                                               *)
 (* Test for KVALID.                                                          *)
 (* ------------------------------------------------------------------------- *)
@@ -78,7 +140,7 @@ kg `META X:A.
       ancestor pippo X`;;
 let cg = !current_goalstack;;
 
-(* -2 : funziona! Non crea meta. *)
+(* -2 : funziona! Non istanzia meta. *)
 ke (TAC_KTAC (MATCH_MP_TAC (ASSUME `!X Y:A Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z`)));;
 
 (* -1 : funziona! Crea una nuova meta per Y. *)
@@ -109,6 +171,17 @@ ke1 (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ke1 (FIRST_ASSUM_KTAC ACCEPT_KTAC);;
 ktop_thm();;
 
+current_goalstack := cg; p();;
+ke1 (kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC))
+             [FIRST_ASSUM_KTAC ACCEPT_KTAC;
+              FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
+ktop_thm();;
+
+current_goalstack := cg; p();;
+ke1 (kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC))
+            (FIRST_ASSUM_KTAC ACCEPT_KTAC));;
+ktop_thm();;
+
 kprove1
  (`META X:A.
       (!X. ancestor X X) AND
@@ -118,7 +191,7 @@ kprove1
       ENTAILS
       ancestor pippo X`,
   kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC) (TAC_KTAC CONJ_TAC))
-          [trace_ktactic "*" (FIRST_ASSUM_KTAC ACCEPT_KTAC);
+          [FIRST_ASSUM_KTAC ACCEPT_KTAC;
            FIRST_ASSUM_KTAC ACCEPT_KTAC]);;
 
 (* 1/4 : Ok, dà MK_KTAC: Wrong theorem *)
@@ -174,6 +247,33 @@ kprove1
   kthen_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
                  (TAC_KTAC CONJ_TAC))
          (trace_ktactic "#" (FIRST_ASSUM_KTAC ACCEPT_KTAC)));;
+
+(* Esempio precedente senza branch. *)
+
+kprove1
+ (`META X:A.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthenl_ (kthen_ (MP_KTAC (ASSUME `!X:A Y:A Z:A. ancestor X Y /\ ancestor Y Z
+                                                  ==> ancestor X Z`))
+                  (TAC_KTAC CONJ_TAC))
+          [ACCEPT_KTAC (ASSUME `ancestor (pippo:A) (pluto:A):bool`);
+           ACCEPT_KTAC (ASSUME `ancestor (pluto:A) (paperino:A):bool`)]);;
+
+kprove1
+ (`META X:A.
+     (!X Y Z. ancestor X Y /\ ancestor Y Z ==> ancestor X Z) AND
+     ancestor pippo pluto AND
+     ancestor pluto paperino
+     ENTAILS
+     ancestor pippo X`,
+  kthenl_ (kthen_ (FIRST_ASSUM_KTAC MP_KTAC)
+                  (TAC_KTAC CONJ_TAC))
+          [ACCEPT_KTAC (ASSUME `ancestor (pippo:A) (pluto:A):bool`);
+           ACCEPT_KTAC (ASSUME `ancestor (pluto:A) (paperino:A):bool`)]);;
 
 kprove1
  (`META X:A.
