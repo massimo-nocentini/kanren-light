@@ -1,0 +1,78 @@
+(* ========================================================================= *)
+(* Basic implemenation of stremas.                                           *)
+(* ========================================================================= *)
+
+type 'a stream = Empty | Cons of 'a * (unit -> 'a stream);;
+
+let empty : 'a stream = Empty;;
+
+let cons (x : 'a) (s : 'a stream) : 'a stream = Cons(x, fun _ -> s);;
+
+let is_empty = function Empty -> true | _ -> false;;
+
+let split (s : 'a stream) : 'a * (unit -> 'a stream) =
+  match s with
+    Empty -> failwith "Empty stream"
+  | Cons (x, s') -> (x, s');;
+
+let rec mplusf (c1: 'a stream) (c2: unit -> 'a stream) : 'a stream =
+   match c1 with
+     Empty -> c2 ()
+   | Cons (x, f) -> Cons (x, fun _ -> mplusf (c2 ()) f);;
+
+let rec bind (c : 'a stream) (g : 'a -> 'b stream) : 'b stream =
+  match c with
+    Empty -> Empty
+  | Cons (x, f) -> mplusf (g x) (fun _ -> bind (f ()) g);;
+
+let next : 'a stream -> 'a stream =
+  function
+    Empty -> failwith "Empty stream"
+  | Cons (x, f) -> f ();;
+
+let get : 'a stream -> 'a =
+  function
+    Empty -> failwith "Empty stream"
+  | Cons (x,_) -> x;;
+
+let rec take n =
+  function
+    Empty -> []
+  | Cons (x,s) -> if n > 0 then x :: take (n-1) (s ()) else [];;
+
+let rec stream_map (f : 'a -> 'b) (s : 'a stream) : 'b stream =
+  match s with
+    Empty -> Empty
+  | Cons (x,s') -> Cons (f x, fun () -> stream_map f (s' ()));;
+
+let rec stream_mapfilter (f : 'a -> 'b) (s : 'a stream) : 'b stream =
+  match s with
+    Empty -> Empty
+  | Cons (x,s') ->
+      match try Some (f x) with Failure _ -> None with
+        None -> stream_mapfilter f (s' ())
+      | Some y -> Cons (y, fun () -> stream_mapfilter f (s' ()));;
+
+let singleton (x : 'a) : 'a stream = Cons(x, fun _ -> Empty);;
+
+let rec const (x : 'a) : 'a stream = Cons(x, fun _ -> const x);;
+
+let rec nats n = Cons(n, fun _ -> nats (n+1));;
+
+let twos_and_zeros_test =
+  assert ([2; 0; 2; 0; 2; 0; 2; 0; 2; 0] =
+          take 10 (mplusf (const 2) (fun () -> const 0)));;
+
+let bind_test =
+  assert ([2; 4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4; 2; 10; 2;
+           4; 2; 6; 2; 4; 2; 8; 2; 4; 2; 6; 2; 4] =
+          take 30 (bind (nats 1) (fun n -> const (2 * n))));;
+(*
+    previous result should be interpreted as follows:
+    2₀ 2₂ 2₄ 2₆ 2₈ 2₁₀ 2₁₂ 2₁₄ 2₁₆ 2₁₈ 2₂₀ 2₂₂ 2₂₄ 2₂₆  2₂₈
+    4₁ 4₅ 4₉ 4₁₃ 4₁₇ 4₂₁ 4₂₅ 4₂₉
+    6₃ 6₁₁ 6₁₉ 6₂₇
+    8₇ 8₂₃
+    10₁₅
+    where subscripts denotes positions in the list of items they are attached to.
+*)
