@@ -20,6 +20,14 @@ let rec mplusf (c1: 'a stream) (c2: unit -> 'a stream) : 'a stream =
      Empty -> c2 ()
    | Cons (x, f) -> Cons (x, fun _ -> mplusf (c2 ()) f);;
 
+let rec concatf (c1: 'a stream) (c2: unit -> 'a stream) : 'a stream =
+  match c1 with
+    Empty -> c2 ()
+  | Cons (x, f) -> Cons (x, fun _ -> concatf (f ()) c2);;
+
+let rec concat (c1: 'a stream) (c2: 'a stream) : 'a stream =
+  concatf c1 (fun _ -> c2);;
+
 let rec bind (c : 'a stream) (g : 'a -> 'b stream) : 'b stream =
   match c with
     Empty -> Empty

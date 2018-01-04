@@ -5,6 +5,37 @@
 loadt "streams.hl";;
 
 (* ------------------------------------------------------------------------- *)
+(* Our own unification procedure.                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let term_unify2 (avs : term list) (tm1 : term)
+                (mvs : term list) (tm2 : term)
+                : instantiation * instantiation * thm =
+  let avs,p,tm1 =
+     let avs' = variants (union (frees tm2) mvs) avs in
+     let tm1' = vsubst (zip avs' avs) tm1 in
+     let p = term_unify avs tm1 tm1' in
+     avs',p,tm1' in
+  let i = term_unify (union avs mvs) tm1 tm2 in
+  let tm1' = instantiate i tm1
+  and tm2' = instantiate i tm2 in
+  let sol = term_unify mvs tm2 tm2'
+  and th = ALPHA tm1' tm2' in
+  let inst = compose_insts p (term_unify avs tm1 tm1') in
+  inst,sol,th;;
+
+(* Test:
+;;
+let avs = [`x:num`;`y:num`;`c:num`];;
+let mvs = [`a:num`;`b:num`;`c:num`];;
+
+term_unify2 avs `x:num = p` mvs `a:num = q`;;
+term_unify2 avs `x:num = p` mvs `a:num = p`;;
+term_unify2 avs `1 = p` mvs `a:num = p`;;
+term_unify2 avs `c:num = c` mvs `a:num = c + c`;;
+*)
+
+(* ------------------------------------------------------------------------- *)
 (* Kanren goals.                                                             *)
 (* ------------------------------------------------------------------------- *)
 
@@ -147,30 +178,6 @@ let print_metas (mvs,inst) =
 let current_kgoalstack : kgoalstack ref = ref [];;
 
 (* ------------------------------------------------------------------------- *)
-(* top_thm done right!                                                       *)
-(* ------------------------------------------------------------------------- *)
-
-let ktop_proof : goalstate -> term * thm =
-  function
-    ((mvs,inst),[],just) ->
-       let eqsubst v = mk_eq(v,instantiate inst v) in
-       let meta_eqs =
-         if mvs = [] then `T` else
-         end_itlist (curry mk_conj) (map eqsubst mvs) in
-       meta_eqs, just inst []
-  | _ -> failwith "ktop_proof: proof not finished";;
-
-let ktop_proofs : kgoalstate -> (term * thm) stream =
-  stream_mapfilter ktop_proof;;
-
-let ktop_thms () : (term * thm) stream =
-  match !current_kgoalstack with
-    [] -> failwith "ktop_thm: empty kgoalstack"
-  | gs::_ -> ktop_proofs gs;;
-
-let ktop_thm1 () : term * thm = get (ktop_thms ());;
-
-(* ------------------------------------------------------------------------- *)
 (* Meta goals.                                                               *)
 (* ------------------------------------------------------------------------- *)
 
@@ -209,11 +216,15 @@ dest_kanren_goal
      fives X`;;
 *)
 
+let propagate_thm1 i [th] = INSTANTIATE_ALL i th;;
+
+let propagate_thm0 th i [] = INSTANTIATE_ALL i th;;
+
 let set_kanren_goal =
-  let propagate_thm i [th] = INSTANTIATE_ALL i th in
   fun (mvars,tml,w) ->
     let asl = map (fun tm -> "",ASSUME tm) tml in
-    current_kgoalstack := [singleton ((mvars,null_inst),[asl,w],propagate_thm)];
+    current_kgoalstack :=
+      [singleton ((mvars,null_inst),[asl,w],propagate_thm1)];
     !current_kgoalstack;;
 
 let kg tm =
@@ -299,8 +310,6 @@ let kprove_thm1 ((tm,ktac) : term * ktactic) :
     (term list * instantiation) * thm =
   get (kprove_thms (tm,ktac));;
 
-
-
 (*
 let (kprove_thm : term * ktactic -> term list * thm) =
   fun tm,ktac ->
@@ -325,6 +334,46 @@ let (kprove_thm : term * ktactic -> term list * thm) =
     let eqs = map (fun v -> mk_eq(v,instantiate inst v)) mvs in
     eqs,th;;
 *)
+
+(* ------------------------------------------------------------------------- *)
+(* Interactive usage of tactics.                                             *)
+(* ------------------------------------------------------------------------- *)
+
+let (krefine:(goalstate -> kgoalstate) -> kgoalstack) =
+  fun r ->
+    let l = !current_kgoalstack in
+    if l = [] then failwith "No current kgoal" else
+    let gs,gss = split (hd l) in
+    let res = concatf (r gs) gss :: l in
+    current_kgoalstack := res;
+    !current_kgoalstack;;
+
+(*
+let ke ktac = krefine(kby(KVALID ktac));;
+*)
+
+let ke ktac = krefine(kby ktac);;
+
+(* ------------------------------------------------------------------------- *)
+(* top_thm done right!                                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let ktop_proof : goalstate -> term list * thm =
+  function
+    ((mvs,inst),[],just) ->
+       let mk_veq v = mk_eq(v,instantiate inst v) in
+       map mk_veq mvs, just null_inst []
+  | _ -> failwith "ktop_proof: proof not finished";;
+
+let ktop_proofs : kgoalstate -> (term list * thm) stream =
+  stream_mapfilter ktop_proof;;
+
+let ktop_thms () : (term list * thm) stream =
+  match !current_kgoalstack with
+    [] -> failwith "ktop_thms: empty kgoalstack"
+  | gs::_ -> ktop_proofs gs;;
+
+let ktop_thm1 () : term list * thm = get (ktop_thms ());;
 
 (* ------------------------------------------------------------------------- *)
 (* Upgrade a tactic into a ktactic.                                          *)
@@ -359,10 +408,6 @@ let CONV_KTAC (conv : conv) : ktactic = TAC_KTAC (CONV_TAC conv);;
 (* Tactic for reflexivity.                                                   *)
 (* ------------------------------------------------------------------------- *)
 
-let propagate_thm1 i [th] = INSTANTIATE_ALL i th;;
-
-let propagate_thm0 th i [] = INSTANTIATE_ALL i th;;
-
 let REFL_KTAC : ktactic =
   fun mvs,(asl,w) ->
     let ltm,rtm = dest_eq w in
@@ -380,9 +425,11 @@ kprove_thm1(`META A B. [A;1;2] = [0;2;B]`,REFL_KTAC);;
 kprove_thm1(`META A B. [A;1;2] = [0;1;B]`,TAC_KTAC REFL_TAC);;
 
 kg `META A B. [A;1;2] = [0;1;B]`;;
-ke (TAC_KTAC REFL_TAC);;
+ke (TAC_KTAC REFL_TAC);;  (* Fallisce. *)
+
+kg `META A B. [A;1;2] = [0;1;B]`;;
 ke REFL_KTAC;;
-ktop_thm();;
+ktop_thm1();;
 *)
 (* ------------------------------------------------------------------------- *)
 
@@ -395,11 +442,13 @@ ktop_thm();;
 (* un teorema con variabili fresche.  Non cambia le ipostesi.                *)
 (* ------------------------------------------------------------------------- *)
 
+(*
 let fresh_thm th =
   let vars,bth = splitlist SPEC_VAR th in
   let vars' = map (genvar o snd o dest_var) vars in
   let bth' = INST (zip vars' vars) bth in
   GENL vars' bth';;
+*)
 
 (* Test *)
 (*;;
@@ -407,6 +456,8 @@ UNDISCH (ARITH_RULE `x = 1 ==> !x y. x + y = y + x`);;
 fresh_thm it;;
 *)
 
+(* Versione prima di term_unify2 *)
+(*
 let ACCEPT_KTAC : thm_ktactic =
   fun th ->
     let th = fresh_thm th in
@@ -418,6 +469,18 @@ let ACCEPT_KTAC : thm_ktactic =
         with Failure _ -> failwith "ACCEPT_KTAC: No match" in
       let th' = INSTANTIATE insts th in
       singleton ((mvs,insts),[],propagate_thm0 th');;
+*)
+
+let SPEC_VARS = splitlist SPEC_VAR;;
+
+let ACCEPT_KTAC : thm_ktactic =
+  fun th ->
+    let avs,th = SPEC_VARS th in
+    fun mvs,(asl,w) ->
+      let inst,sol,eth = term_unify2 avs (concl th) mvs w in
+      let th' = INSTANTIATE_ALL inst th in
+      let just = propagate_thm0 (EQ_MP eth th') in
+      singleton ((mvs,sol),[],just);;
 
 (* ------------------------------------------------------------------------- *)
 (* Test: *)
@@ -435,7 +498,15 @@ kprove_thm1
  (`META a. (!x:num. x = 2) ENTAILS a = 1`,
   PROTECT (ACCEPT_KTAC(ASSUME `!x:num. x = 2`)));;
 
+kprove_thm1
+ (`META a. (!x:num. x = x) ENTAILS a = 1 + x`,
+  ACCEPT_KTAC(ASSUME `!x:num. x = x`));;
+
+kg `META a. (!x:num. x = x) ENTAILS a = 1 + x`;;
+ke (ACCEPT_KTAC(ASSUME `!x:num. x = x`));;
+ktop_thm1();;
 *)
+
 (* ------------------------------------------------------------------------- *)
 
 let propagate_mp rth i =
@@ -456,6 +527,8 @@ let propagate_mp rth i [th] =
 (* Diversa da TAC_KTAC (MP_TAC tm) perché fa uso delle metavariabili.        *)
 (* ------------------------------------------------------------------------- *)
 
+(* Versione precedente a term_unify2 *)
+(*
 let (MP_KTAC : thm_ktactic) =
   fun th ->
     let th = fresh_thm th in
@@ -469,6 +542,33 @@ let (MP_KTAC : thm_ktactic) =
       let mvs' = union mvs (thm_frees th') in
       let gl = inst_goal inst (asl,btm) in
       singleton ((mvs',inst),[gl],propagate_mp th');;
+*)
+
+let (MP_KTAC : thm_ktactic) =
+  fun th ->
+    let avs,th = SPEC_VARS th in
+    let tm = concl th in
+    let btm,htm = try dest_imp tm with Failure _ ->
+                  failwith "MK_KTAC: Wrong theorem" in
+    fun mvs,(asl,w) ->
+      let inst,sol,eth = term_unify2 avs htm mvs w in
+      let th' = INSTANTIATE_ALL inst th in
+      let just = propagate_mp th' in
+      let (_,btm') as gl = inst_goal sol (inst_goal inst (asl,btm)) in
+      let mvs' = union (frees btm') mvs in
+      singleton ((mvs',sol),[gl],just);;
+
+kg `META a b:nat.
+      pippo = pluto AND
+      pluto = paperino
+      ENTAILS
+      a = b`;;
+ke (MP_KTAC (MESON [] `!x y z:nat. x = y /\ y = z ==> x = z`));;
+ke (TAC_KTAC CONJ_TAC);;
+ke (ACCEPT_KTAC (ASSUME `pippo:nat = pluto`));;
+ke (ACCEPT_KTAC (ASSUME `pluto:nat = paperino`));;
+ktop_thm1();;
+
 
 (* ------------------------------------------------------------------------- *)
 (* Tactic composition.                                                       *)
@@ -834,8 +934,6 @@ let (KVALID:ktactic->ktactic) =
 let WRONG_KTAC : ktactic =
   let wrong_propagate _ _ = REFL `1` in
   fun _ -> null_meta,[],wrong_propagate;;
-
-let ke ktac = refine(kby(KVALID ktac));;
 
 (* ------------------------------------------------------------------------- *)
 (* Perform refinement proof, tactic proof etc.                               *)
