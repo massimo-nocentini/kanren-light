@@ -43,7 +43,7 @@ type kgoal = term list * goal;;                     (* metavariables * goal *)
 
 let (inst_kgoal:instantiation->kgoal->kgoal) =
   fun i (mvs,g) ->
-    let mvs' = intersect mvs (freesl (map (instantiate i) mvs)) in
+    let mvs' = union mvs (freesl (map (instantiate i) mvs)) in
     mvs',inst_goal i g;;
 
 (* ------------------------------------------------------------------------- *)
@@ -168,10 +168,6 @@ let (print_kgoalstack:kgoalstack->unit) =
 
 #install_printer print_kgoalstack;;
 
-(* ------------------------------------------------------------------------- *)
-(* VECCHIO FILE ktactics.hl                                                  *)
-(* ------------------------------------------------------------------------- *)
-
 let print_metas (mvs,inst) =
   do_list (fun v -> print_term(mk_eq(v,instantiate inst v))) mvs;;
 
@@ -264,17 +260,19 @@ let trace_ktactic msg ktac (mvs,g) =
 (* ------------------------------------------------------------------------- *)
 
 let mk_refinement
-    (just:justification) (inst:instantiation) (ogls:goal list) : refinement =
+    (just:justification) (mvs:term list) (inst:instantiation) (ogls:goal list)
+    : refinement =
   fun ((newmvs,newinst),subgls,subjust) ->
   let n = length subgls in
-  let ogls' = map (inst_goal inst) ogls in
-  let gls' = subgls @ ogls' in
+  let mvs' = union newmvs mvs in
+  let gls' = subgls @ map (inst_goal newinst) ogls in
   let inst' = compose_insts inst newinst in
   let just' i ths =
+    let i' = compose_insts inst' i in
     let cths,oths = chop_list n ths in
     let sths = subjust i cths :: oths in
-    just i sths in
-  (newmvs,inst'),gls',just';;
+    just i' sths in
+  (mvs',inst'),gls',just';;
 
 let kby : ktactic -> goalstate -> kgoalstate =
   fun ktac ((mvs,inst),gls,just) ->
@@ -282,7 +280,7 @@ let kby : ktactic -> goalstate -> kgoalstate =
     let g = hd gls
     and ogls = tl gls in
     let gsl = ktac (mvs,g) in
-    stream_map (mk_refinement just inst ogls) gsl;;
+    stream_map (mk_refinement just mvs inst ogls) gsl;;
 
 let KTAC_PROOFS (gstate : goalstate) (ktac : ktactic) :
     ((term list * instantiation) * thm) stream =
@@ -294,8 +292,8 @@ let KTAC_PROOFS (gstate : goalstate) (ktac : ktactic) :
 
 let check_kthm tm ((mvs,inst),th) =
   let mvs',(atms,w) = dest_kanren_goal tm in
-  if not(mvs = mvs') then failwith "check_kthm: metas changed" else
-  if concl th = instantiate inst w then (mvs,inst),th else
+  if not(subset mvs' mvs) then failwith "check_kthm: lost metas" else
+  if aconv (concl th) (instantiate inst w) then (mvs,inst),th else
   failwith "check_kthm: wrong theorem";;
 
 let kprove_thms ((tm,ktac) : term * ktactic) :
@@ -558,6 +556,8 @@ let (MP_KTAC : thm_ktactic) =
       let mvs' = union (frees btm') mvs in
       singleton ((mvs',sol),[gl],just);;
 
+(* Test;;
+
 kg `META a b:nat.
       pippo = pluto AND
       pluto = paperino
@@ -568,7 +568,7 @@ ke (TAC_KTAC CONJ_TAC);;
 ke (ACCEPT_KTAC (ASSUME `pippo:nat = pluto`));;
 ke (ACCEPT_KTAC (ASSUME `pluto:nat = paperino`));;
 ktop_thm1();;
-
+*)
 
 (* ------------------------------------------------------------------------- *)
 (* Tactic composition.                                                       *)
@@ -587,7 +587,7 @@ let compose_justs
   let ths1,ths2 = chop_list n ths in
   (just1 i ths1)::(just2 i ths2);;
 
-(* Il valore di ritorno di seqapply e "quasi" un goalstate ma la terza
+(* Il valore di ritorno di seqapply e "quasi" un goalstate, ma la terza
    componente e' una justification "multipla".
    La terza componente e' una funzione
      j inst (sths@oths)
@@ -605,15 +605,15 @@ let compose_justs
 let rec seqapply (l1:ktactic list) (l2:kgoal list)
           : (term list * instantiation) * goal list *
             (instantiation -> thm list -> thm list) =
- match (l1,l2) with
-   ([],[]) -> null_meta,[],propagate_empty
- | ((ktac:ktactic)::ktacs),((kgoal:kgoal)::kgoals) ->
-          let ((mvs1,insts1),gls1,just1) = ktac kgoal in
-          let kgoals' = map (inst_kgoal insts1) kgoals in
-          let ((mvs2,insts2),gls2,just2) = seqapply ktacs kgoals' in
-          ((union mvs1 mvs2,compose_insts insts1 insts2),
-           gls1@gls2,compose_justs (length gls1) just1 just2)
- | _,_ -> failwith "seqapply: Length mismatch";;
+  match (l1,l2) with
+    ([],[]) -> null_meta,[],propagate_empty
+  | (ktac::ktacs),(kgoal::kgoals) ->
+           let ((mvs1,insts1),gls1,just1) = ktac kgoal in
+           let kgoals' = map (inst_kgoal insts1) kgoals in
+           let ((mvs2,insts2),gls2,just2) = seqapply ktacs kgoals' in
+           ((union mvs1 mvs2,compose_insts insts1 insts2),
+            gls1@gls2,compose_justs (length gls1) just1 just2)
+  | _,_ -> failwith "seqapply: Length mismatch";;
 
 let justsequence
     (just1:justification)
@@ -631,70 +631,9 @@ let (ktacsequence : goalstate -> ktactic list -> goalstate) =
     let inst = compose_insts insts1 insts2 in
     ((mvs2,inst),gls2,just);;
 
-(* Version with redundant metas. *)
-(*
-let (ktacsequence : goalstate -> ktactic list -> goalstate) =
-  fun ((mvs1,insts1),gls1,just1) ktacl ->
-    let ((mvs2,insts2),gls2,just2) =
-      seqapply ktacl (map (fun g -> mvs1,g) gls1) in
-    let just = justsequence just1 just2 insts2 in
-    ((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just);;
-*)
 
-(* Versioni senza Choice *)
-(*
-let (kthenl_: ktactic -> ktactic list -> ktactic) =
-  fun ktac1 ktac2l g -> ktacsequence (ktac1 g) ktac2l;;
 
-let (kthen_: ktactic -> ktactic -> ktactic) =
-  fun ktac1 ktac2 g ->
-    let _,gls,_ as gstate = ktac1 g in
-    ktacsequence gstate (replicate ktac2 (length gls));;
-*)
 
-(* Versioni naive con Choice: non fonde gli stream! *)
-(*
-let (kthenl_: ktactic -> ktactic list -> ktactic) =
-  fun ktac1 ktac2l g ->
-    let gstate =
-      try ktac1 g with Choice (gstate, k) ->
-        let gstate' = ktacsequence gstate ktac2l in
-        let k' () = ktacsequence (k ()) ktac2l in
-        raise (Choice (gstate', k')) in
-    ktacsequence gstate ktac2l;;
-
-let (kthen_: ktactic -> ktactic -> ktactic) =
-  fun ktac1 ktac2 g ->
-    let _,gls,_ as gstate =
-      try ktac1 g with Choice (_,gls,_ as gstate, k) ->
-        let gstate' = ktacsequence gstate (replicate ktac2 (length gls)) in
-        let k' () =
-          let _,gls,_ as gstate = k () in
-          ktacsequence gstate (replicate ktac2 (length gls)) in
-        raise (Choice (gstate', k')) in
-    ktacsequence gstate (replicate ktac2 (length gls));;
-*)
-
-(* Versione sbagliata! Fa ripartire k con il goal g' invece che g! *)
-(*
-let (kthenl_: ktactic -> ktactic list -> ktactic) =
-  fun ktac1 ktac2l g ->
-    match
-      try Ok (ktac1 g) with
-        Failure s -> Error s
-      | Choice (gstate,k) ->
-          match
-            try Ok (ktacsequence gstate ktac2l) with
-              Failure _ -> Error ""
-            | Choice (gstate',k') ->
-                raise (Choice (gstate', fun g -> mplus k' k g))
-          with
-            Error s -> failwith s
-          | Ok gstate -> raise (Choice (gstate, k))
-    with
-      Error s -> failwith s
-    | Ok gstate -> ktacsequence gstate ktac2l;;
-*)
 
 (* Quick and dirty fix: usa (fun _ -> k g) al posto di k. *)
 let (kthenl_: ktactic -> ktactic list -> ktactic) =
