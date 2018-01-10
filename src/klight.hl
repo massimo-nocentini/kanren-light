@@ -1,0 +1,123 @@
+needs "streams.hl";;
+
+(* ------------------------------------------------------------------------- *)
+(* Basic types.                                                              *)
+(* ------------------------------------------------------------------------- *)
+
+type kgoal = term list * goal;;
+(* meta, (asl, w) *)
+(* metas = variabili che possono essere instanziate *)
+(* asl   = ipotesi *)
+(* w     = tesi *)
+
+(* ------------------------------------------------------------------------- *)
+(* Una giustificazione di th1, ..., thN -> th deve avere la proprietà        *)
+(* just @ [th1@; ...; thN@] = th@                                            *)
+(* ------------------------------------------------------------------------- *)
+
+type kstatus = (term list * instantiation) * kgoal list * justification;;
+(* (mvs,inst),gls,just *)
+(* mvs  = nuove variabli esistenziali prodotte *)
+(* inst = instanziazione parziale *)
+(* gls  = sottogoals da risolvere *)
+(* just = justificazione *)
+
+type ktactic = kgoal -> kstatus stream;;
+
+type thm_ktactic = thm -> ktactic;;
+
+(* ------------------------------------------------------------------------- *)
+(* Elementary tactics.                                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let FINISH_KTAC : ktactic = fun _ -> empty;;
+
+let REFL_KTAC : ktactic =
+  fun mvs,(_,w) ->
+    try let ltm,rtm = dest_eq w in
+        let inst = term_unify mvs ltm rtm in
+        let th = ALPHA (instantiate inst ltm) (instantiate inst rtm) in
+        singleton (([],inst),[],fun i _ -> INSTANTIATE_ALL i th)
+    with Failure _ -> empty;;
+
+take 10 (REFL_KTAC ([`a:num`],([],`a = 1`)));;
+
+let ACCEPT_KTAC : thm_ktactic =
+  fun th ->
+    fun mvs,(_,w) ->
+      try let inst = term_unify mvs (concl th) w in
+          let th' = INSTANTIATE_ALL inst th in
+          singleton (([],inst),[],fun i _ -> INSTANTIATE_ALL i th')
+      with Failure _ -> empty;;
+
+take 10 (ACCEPT_KTAC (REFL `1`) ([`a:num`],([],`a = 1`)));;
+take 10 (ACCEPT_KTAC (REFL `1`) ([`a:num`],([],`a = 2`)));;
+
+(* ------------------------------------------------------------------------- *)
+(* Una giustificazione di th1, ..., thN -> th deve avere la proprietà        *)
+(* just @ [th1@; ...; thN@] = th@                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let DISJ1_KTAC : ktactic =
+  fun mvs,(asl,w) ->
+    try let w1,w2 = dest_disj w in
+        let just i (th::_) = DISJ1 th (instantiate i w2) in
+        singleton(null_meta,[mvs,(asl,w1)],just)
+    with Failure _ -> empty;;
+
+(* ------------------------------------------------------------------------- *)
+(* Running tactics.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let wrapup : kstatus -> (term list * instantiation) * thm =
+  fun (mvs,_ as meta),gls,just ->
+    warn (mvs <> []) "wrapup: extra metas";
+    if gls = [] then meta,just null_inst [] else
+    failwith "wrapup: proof not finished";;
+
+let solutions : kstatus stream -> ((term list * instantiation) * thm) stream =
+  stream_mapfilter wrapup;;
+
+take 10 (solutions (REFL_KTAC ([`a:num`],([],`a = 1`))));;
+take 10 (solutions (ACCEPT_KTAC (REFL `1`) ([`a:num`],([],`a = 1`))));;
+
+(* ------------------------------------------------------------------------- *)
+(* Seqapply: Apply a list of ktactics to a list of kgoals.                   *)
+(* Instantiation is propagated from one goal to the next one.                *)
+(* ------------------------------------------------------------------------- *)
+
+let inst_kgoal (newmvs,newinst) (mvs,gl:kgoal) : kgoal =
+  union newmvs mvs,inst_goal newinst gl;;
+
+let rec apply_ktactics
+          (ktacl:ktactic list)
+          (accmvs, accinst : term list * instantiation)
+          (accjust:instantiation -> thm list -> thm)
+          (kgls:kgoal list)
+          : kstatus stream =
+  match ktacl,kgls with
+    [],[] -> singleton((accmvs,accinst),kgls,accjust)
+  | (ktac::oktacl),(kgl::okgls) ->
+       let s = ktac kgl in
+       bind s (fun (newmvs,newinst as newmeta),newkgls,newjust ->
+         let okgls' = map (inst_kgoal newmeta) okgls in
+         let accmvs' = union newmvs accmvs in
+         let accinst' = compose_insts accinst newinst in
+         let n = length newkgls in
+         let accjust' i thl =
+           let newths,thl' = chop_list n thl in
+           let newth = newjust i newths in
+           accjust i (newth :: thl') in
+         let kgls' = newkgls @ okgls' in
+         apply_ktactics oktacl (accmvs',accinst') accjust' kgls')
+  | _,_ -> failwith "apply_ktactics: wrong number of tactics";;
+
+let seqapply (ktacl:ktactic list) : kstatus -> kstatus stream =
+  fun meta,kgls,just -> apply_ktactics ktacl meta just kgls;;
+
+(* ------------------------------------------------------------------------- *)
+(* Compose tactics.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let compose_ktactics (ktac:ktactic) (ktacl:ktactic list) : ktactic =
+  fun gl -> bind (ktac gl) (seqapply ktacl);;
