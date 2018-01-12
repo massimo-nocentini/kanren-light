@@ -58,10 +58,6 @@ let solve : solver -> term -> (term list * thm) stream =
     let mvs,g as mg = dest_mgoal tm in
     let mk_veqs inst = map (mk_veq inst) mvs in
     let p ((mvs',inst),th) =
-      (* Attualmente è necessaria una instanziazione finale
-         (vedi esempio successivo), forse si potrebbe propagare
-         l'instanziazione prima. *)
-      (* mk_veqs inst,INSTANTIATE inst th in *)
       mk_veqs inst,th in
     stream_map p (run_solver (dest_mgoal tm) slv);;
 
@@ -98,60 +94,11 @@ let SPEC_FRESH_ALL = splitlist SPEC_FRESH;;
 
 let ACCEPT_SLV : thm_solver =
   fun th -> SOLVER (fun mvs (asl,w) ->
-    let vs,th' = SPEC_FRESH_ALL th in
+let vs,th' = SPEC_FRESH_ALL th in
     let inst = term_unify (union vs mvs) (concl th') w in
     let sth = INSTANTIATE inst th' in
     let just i _ = INSTANTIATE_ALL i sth in
     ([],inst),[],just);;
-
-(* Verifica che la giustificazione prodotta da ACCEPT_SLV rispetta l'invariante. *)
-(*;;
-let gl = dest_mgoal `??n m. m + n = 1 + m`;;
-let [gstate] = take 10 (ACCEPT_SLV ADD_SYM gl);;
-let (mvs,inst),[],just = gstate;;
-wrapup gstate;;
-just ([],[`2`,`m:num`],[]) [];;
-*)
-
-
-g `(?x:num. p(x) /\ q(x) /\ r(x)) ==> ?y. p(y) /\ (q(y) <=> r(y))`;;
-e STRIP_TAC;;
-e (X_META_EXISTS_TAC `n:num` THEN CONJ_TAC);;
-e (FIRST_X_ASSUM(UNIFY_ACCEPT_TAC [`n:num`]));;
-e (EQ_TAC THEN DISCH_TAC THEN FIRST_ASSUM ACCEPT_TAC);;
-top_thm();;
-
-(* ------------------------------------------------------------------------- *)
-(* ESPERIMENTI PER TRACCIARE LA PROPAGAZIONE DELLE INSTANZIAZIONI.           *)
-(* ------------------------------------------------------------------------- *)
-
-(*
-g `?m n. m + n = n + m /\ n = 1`;;
-e (X_META_EXISTS_TAC `m:num`);;
-e (X_META_EXISTS_TAC `n:num`);;
-*)
-
-(*
-let propagate_thm0 i [th] = INSTANTIATE_ALL i th;;
-current_goalstack := [([`m:num`;`n:num`],null_inst),[[],`m + n = n + m /\ n = 1`],propagate_thm0];;
-!current_goalstack;;
-e (CONJ_TAC THENL
-   [UNIFY_ACCEPT_TAC [`m:num`;`n:num`] (REFL `a:num`); ALL_TAC]);;
-let (mvs,inst),[gl],just = hd(!current_goalstack);;
-
-e (UNIFY_ACCEPT_TAC [`m:num`;`n:num`] (SPEC_ALL ADD_SYM));;
-e (UNIFY_ACCEPT_TAC [`m:num`;`n:num`] (REFL `1`));;
-top_thm();;
-
-UNIFY_ACCEPT_TAC [`m:num`;`n:num`] ADD_SYM ([],`m + n = n + m`);;
-
-let gl:goal = [],`m + n = n + m /\ n = 1`;;
-(CONJ_TAC THENL [UNIFY_ACCEPT_TAC [`m:num`;`n:num`] ADD_SYM;
-                 UNIFY_ACCEPT_TAC [`m:num`;`n:num`] (REFL `1`)])
-               gl;;
-
-take 10 (solve (ACCEPT_SLV ADD_SYM) `??n. n + n = 1 + n`);;
-*)
 
 let RULE_SLV : thm_solver = fun th ->
  if not(is_imp(snd(strip_forall(concl th)))) then
@@ -194,59 +141,12 @@ let DISJ2_SLV = TACTIC_SLV DISJ2_TAC;;
 (* Solver combinators.                                                       *)
 (* ------------------------------------------------------------------------- *)
 
-(*
 let THEN_SLV,THENL_SLV =
-  let propagate_empty (i:instantiation) ([]:thm list) = []
-  and propagate_thm (th:thm) (i:instantiation) ([]:thm list) : thm =
-    INSTANTIATE_ALL i th in
-  let compose_justs (n:int) (just1:justification)
-        (just2:instantiation->thm list->thm list) i ths =
-    let ths1,ths2 = chop_list n ths in
-    just1 i ths1 :: just2 i ths2 in
-  let rec seqapply (l1:solver list) (mvs:term list) (l2:goal list) :
-            ((term list * instantiation) * goal list *
-             (instantiation -> thm list -> thm list)) stream =
-    match (l1,l2) with
-      ([],[]) -> singleton (null_meta,[],propagate_empty)
-    | (slv::slvs), (goal::goals) ->
-        bind (slv (mvs,goal)) (fun (mvs1,insts1),gls1,just1 ->
-          let goals' = map (inst_goal insts1) goals in
-          bind (seqapply slvs (union mvs1 mvs) goals')
-            (fun (mvs2,insts2),gls2,just2 ->
-              singleton
-                ((union mvs1 mvs2,compose_insts insts1 insts2),
-                 gls1@gls2,compose_justs (length gls1) just1 just2)))
-    | _,_ -> failwith "seqapply: Length mismatch" in
-  let justsequence (just1:justification)
-                   (just2:instantiation->thm list->thm list)
-                   (insts2:instantiation) (i:instantiation) (ths:thm list)
-                   : thm =
-    just1 (compose_insts insts2 i) (just2 i ths) in
-  let slvsequence:term list-> goalstate->solver list->goalstate stream =
-    fun mvs0 ((mvs1,insts1),gls1,just1) slvl ->
-      let mvs = union mvs1 mvs0 in
-      bind (seqapply slvl mvs gls1) (fun (mvs2,insts2),gls2,just2 ->
-        let jst = justsequence just1 just2 insts2 in
-        let just = if gls2=[] then propagate_thm(jst null_inst []) else jst in
-        singleton((union mvs mvs2,compose_insts insts1 insts2),gls2,just)) in
-  let THEN_SLV (slv1:solver) (slv2:solver) : solver =
-    fun mvs,_ as g -> bind (slv1 g) (fun _,gls,_ as gstate ->
-                        slvsequence mvs gstate (replicate slv2 (length gls)))
-  and THENL_SLV (slv1:solver) (slv2l:solver list) : solver =
-    fun mvs,_ as g -> bind (slv1 g) (fun (_,gls,_ as gstate) ->
-                        if gls = [] then slvsequence mvs gstate [] else
-                        slvsequence mvs gstate slv2l) in
-  THEN_SLV,THENL_SLV;;
-*)
-;;
-
   let propagate_empty i [] = []
-  and propagate_thm th i [] = INSTANTIATE_ALL i th;;
-
+  and propagate_thm th i [] = INSTANTIATE_ALL i th in
   let compose_justs n just1 just2 i ths =
     let ths1,ths2 = chop_list n ths in
-    (just1 i ths1)::(just2 i ths2);;
-
+    (just1 i ths1)::(just2 i ths2) in
   let rec seqapply mvs l1 l2 = match (l1,l2) with
      ([],[]) -> singleton(null_meta,[],propagate_empty)
    | ((slv:solver)::slvs),((goal:goal)::goals) ->
@@ -254,29 +154,31 @@ let THEN_SLV,THENL_SLV =
          let goals' = map (inst_goal insts1) goals in
          bind (seqapply (union mvs1 mvs) slvs goals')
            (fun (mvs2,insts2),gls2,just2 ->
+             let just1' i = just1 (compose_insts i insts2) in
              singleton ((union mvs1 mvs2,compose_insts insts1 insts2),
-                        gls1@gls2,compose_justs (length gls1) just1 just2)))
-   | _,_ -> failwith "seqapply: Length mismatch";;
-
+                        gls1@gls2,compose_justs (length gls1) just1' just2)))
+   | _,_ -> failwith "seqapply: Length mismatch" in
   let justsequence just1 just2 insts2 i ths =
-    just1 (compose_insts insts2 i) (just2 i ths);;
-
+    just1 (compose_insts insts2 i) (just2 i ths) in
   let slvsequence mvs ((mvs1,insts1),gls1,just1) slvl =
     bind (seqapply (union mvs1 mvs) slvl gls1) (fun (mvs2,insts2),gls2,just2 ->
       let jst = justsequence just1 just2 insts2 in
       let just = if gls2 = [] then propagate_thm (jst null_inst []) else jst in
-      singleton((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just));;
-
+      singleton((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just)) in
   let (THEN_SLV: solver -> solver -> solver) =
     fun slv1 slv2 (mvs,_ as g) ->
       bind (slv1 g) (fun _,gls,_ as gstate ->
-        slvsequence mvs gstate (replicate slv2 (length gls)));;
-
-  let (THENL_SLV: solver -> solver list -> solver) =
+        slvsequence mvs gstate (replicate slv2 (length gls)))
+  and (THENL_SLV: solver -> solver list -> solver) =
     fun slv1 slv2l (mvs,_ as g) ->
       bind (slv1 g) (fun _,gls,_ as gstate ->
         if gls = [] then slvsequence mvs gstate []
-        else slvsequence mvs gstate slv2l);;
+        else slvsequence mvs gstate slv2l) in
+  THEN_SLV,THENL_SLV;;
+
+(* ------------------------------------------------------------------------- *)
+(* Tests and examples.                                                       *)
+(* ------------------------------------------------------------------------- *)
 
 take 10 (solve (THEN_SLV CONJ_SLV REFL_SLV)
   `??m n. m + n = n + m /\ n + n = n + 1`);;
@@ -377,10 +279,11 @@ let USE_ASSUM_SLV : thm_solver -> solver =
 let RULE_ASSUM_SLV : (thm -> thm) -> solver =
   fun rule (_,(asl,_) as g) ->
     THEN_SLV (POP_ASSUM_LIST_SLV(K ALL_SLV))
-             (MAP_EVERY (fun (s,th) -> LABEL_SLV s (rule th)) (rev asl))
+             (MAP_EVERY_SLV (fun (s,th) -> LABEL_SLV s (rule th)) (rev asl))
              g;;
 
 (* ------------------------------------------------------------------------- *)
+(* A simple Prolog-like solver.                                              *)
 (* ------------------------------------------------------------------------- *)
 
 (*
@@ -388,13 +291,6 @@ let APPLY_SLV : thm_solver =
   fun th -> try let rule = RULE_SLV th in
                 ORELSE_SLV (ACCEPT_SLV th) rule
             with Failure _ -> ACCEPT_SLV th;;
-
-let rec PROLOG_SLV thl : solver =
-  fun g -> let SOLVER0 = MAP_FIRST_SLV ACCEPT_SLV thl in
-           let SOLVER1 = FIRST_SLV (mapfilter RULE_SLV thl) in
-           FIRST_SLV [THEN_SLV CONJ_SLV (PROLOG_SLV thl);
-                      SOLVER0;
-                      THEN_SLV SOLVER1 (PROLOG_SLV thl)] g;;
 *)
 
 let PROLOG_SLV thl : solver =
@@ -405,6 +301,10 @@ let PROLOG_SLV thl : solver =
                       EVERY_SLV [rule; REPEAT_SLV CONJ_SLV; PROLOG]
               with Failure _ -> ACCEPT_SLV th in
   THEN_SLV (REPEAT_SLV CONJ_SLV) PROLOG;;
+
+(* ------------------------------------------------------------------------- *)
+(* Tests and examples.                                                       *)
+(* ------------------------------------------------------------------------- *)
 
 take 10
   (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
@@ -440,14 +340,11 @@ let sols = it;;
 map (concl o snd) sols;;
 length it;;
 
-take 10
-  (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
-         `??a b:A. 
-             (!x y z. antenato x y /\ antenato y z ==> antenato x z) &&
-             (!x. antenato x x) &&
-             (!x y. padre x y ==> antenato x y) &&
-             padre pippo pluto && padre pluto paperino
-             ?- antenato a b`);;
-let sols = it;;
-map (concl o snd) sols;;
-length it;;
+(setify o map (concl o snd) o take 100 o
+ solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
+  `??a b:A. 
+      (!x y z. antenato x y /\ antenato y z ==> antenato x z) &&
+      (!x. antenato x x) &&
+      (!x y. padre x y ==> antenato x y) &&
+      padre pippo pluto && padre pluto paperino
+      ?- antenato a b`;;
