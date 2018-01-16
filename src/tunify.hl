@@ -1,0 +1,76 @@
+(* ------------------------------------------------------------------------- *)
+(* First order unification (no type instantiation -- yet).                   *)
+(* ------------------------------------------------------------------------- *)
+
+let (term_unify:term list -> term -> term -> instantiation) =
+  let augment1 sofar (s,x) =
+    let s' = subst sofar s in
+    if vfree_in x s && not (s = x) then failwith "augment_insts"
+    else (s',x) in
+  let raw_augment_insts p insts =
+    p::(map (augment1 [p]) insts) in
+  let augment_insts(t,v) insts =
+    let t' = vsubst insts t in
+    if t' = v then insts
+    else if vfree_in v t' then failwith "augment_insts"
+    else raw_augment_insts (t',v) insts in
+  let rec unify vars tm1 tm2 sofar =
+    if tm1 = tm2 then sofar
+    else if is_var tm1 && mem tm1 vars then
+      try let tm1' = rev_assoc tm1 sofar in
+          unify vars tm1' tm2 sofar
+      with Failure "find" ->
+          augment_insts (tm2,tm1) sofar
+    else if is_var tm2 && mem tm2 vars then
+       try let tm2' = rev_assoc tm2 sofar in
+          unify vars tm1 tm2' sofar
+      with Failure "find" ->
+          augment_insts (tm1,tm2) sofar
+    else if is_abs tm1 then
+      let tm1' = body tm1
+      and tm2' = subst [bndvar tm1,bndvar tm2] (body tm2) in
+      unify vars tm1' tm2' sofar
+    else
+      let l1,r1 = dest_comb tm1
+      and l2,r2 = dest_comb tm2 in
+      unify vars l1 l2 (unify vars r1 r2 sofar) in
+  fun vars tm1 tm2 -> [],unify vars tm1 tm2 [],[];;
+;;
+
+let type_unify : type list -> type -> type -> instantiation =
+  fail ();;
+
+  let augment1 sofar (s,x) =
+    let s' = tysubst sofar s in
+    if occurs_in x s' && not (s' = x) then failwith "augment_insts" else
+    (s',x) in
+  let raw_augment_insts p insts = p::map (augment1[p]) insts in
+  let augment_insts(t,v) insts =
+    let t' = type_subst insts t in
+    if t' = v then insts else
+    if occurs_in v t' then failwith "augment_insts" else
+    raw_augment_insts (t',v) insts in    
+  let rec unify tvars ty1 ty2 sofar =
+    if ty1 = ty2 then sofar
+    else if is_vartype ty1 && mem ty1 tvars then
+      try let ty1' = rev_assoc ty1 sofar in
+          unify tvars ty1' ty2 sofar
+      with Failure _ -> augment_insts (ty2,ty1) sofar
+    else if is_vartype ty2 && mem ty2 tvars then
+      try let ty2' = rev_assoc ty2 sofar in
+          unify tvars ty1 ty2' sofar
+      with Failure _ -> augment_insts (ty1,ty2) sofar
+    else
+      let s1,tyl1 = dest_type ty1
+      and s2,tyl2 = dest_type ty2 in
+      if s1 != s2 then failwith "type_unify" else
+      list_unify tvars tyl1 tyl2 sofar
+  and list_unify tvars tyl1 tyl2 sofar =
+    match tyl1,tyl2 with
+      [],[] -> sofar
+    | ty1::tyl1,ty2::tyl2 -> fail()
+    | _ -> failwith "list_type_unify" in
+  fun tvars ty1 ty2 -> [],[],unify tvars ty1 ty2;;
+
+
+type_unify;;

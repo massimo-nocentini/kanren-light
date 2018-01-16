@@ -1,0 +1,247 @@
+(* ========================================================================= *)
+(* Examples with list of numbers.                                            *)
+(* ========================================================================= *)
+
+type_invention_warning := false;;
+needs "Permutation/make.ml";;
+type_invention_warning := true;;
+
+(* ------------------------------------------------------------------------- *)
+(* Append.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let APPEND_CONS = prove
+ (`!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs`,
+  REWRITE_TAC[APPEND; CONS_11]);;
+
+let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
+let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
+
+take 10 (solve
+  (THEN_SLV (REPEAT_SLV (RULE_SLV NUM_APPEND_CONS))
+            (ACCEPT_SLV NUM_APPEND_NIL))
+  `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
+
+(* ------------------------------------------------------------------------- *)
+(* Filter.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let FILTER_HORN = prove
+ (`(!P:A->bool. FILTER P [] = []) /\
+   (!P x:A xs ys. P x /\ FILTER P xs = ys
+                  ==> FILTER P (CONS x xs) = CONS x ys) /\
+   (!P x:A xs ys. ~P x /\ FILTER P xs = ys ==> FILTER P (CONS x xs) = ys)`,
+  REWRITE_TAC[FILTER] THEN REPEAT STRIP_TAC THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]);;
+
+let [NUM_FILTER_NIL; NUM_FILTER_LE_HORN; NUM_FILTER_GT_HORN] =
+  CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN);;
+
+let PROLOG_SLV thl : solver =
+  let rec PROLOG_SLV g = MAP_FIRST_SLV STEP_SLV thl g
+  and STEP_SLV : thm_solver =
+    fun th ->
+      try let rule = RULE_SLV th in
+          EVERY_SLV [rule;
+                     (TACTIC_SLV o EVERY)
+                       [REPEAT CONJ_TAC; BETA_TAC; NUM_REDUCE_TAC];
+                     PROLOG_SLV]
+      with Failure _ -> ACCEPT_SLV th in
+  THEN_SLV (REPEAT_SLV CONJ_SLV) PROLOG_SLV;;
+
+let solve_filter =
+  solve (PROLOG_SLV (CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN)));;
+
+take 10 (solve_filter `??ys. FILTER (\y. y <= 3) [] = ys`);;
+take 10 (solve_filter `??ys. FILTER (\y. y <= 3) [1] = ys`);;
+take 10 (solve_filter `??ys. FILTER (\y. y <= 3) [5] = ys`);;
+take 10 (solve_filter `??ys. FILTER (\y. y <= 3) [1;5;2] = ys`);;
+
+(* ------------------------------------------------------------------------- *)
+(* Sort.                                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+let SORT = new_definition
+  `SORT le xs ys <=> xs:A list PERMUTED ys /\ ORDERED le ys`;;
+
+let SORT_NIL = prove
+ (`!le. SORT (le:A->A->bool) [] []`,
+  REWRITE_TAC[SORT; PERMUTED_RULES; ORDERED_RULES]);;
+
+let QUICKSORT = prove
+ (`!le:A->A->bool.
+     (!x y. le x y \/ le y x) /\
+     (!x y z. le x y /\ le y z ==> le x z)
+     ==> SORT le [] [] /\
+         (!x xs ys xs1 xs2 ys1 ys2.
+            FILTER (\y. le y x) xs = xs1 /\
+            SORT le xs1 ys1 /\
+            FILTER (\y. ~le y x) xs = xs2 /\
+            SORT le xs2 ys2 /\
+            APPEND ys1 (CONS x ys2) = ys
+            ==> SORT le (CONS x xs) ys)`,
+  REWRITE_TAC[SORT_NIL] THEN INTRO_TAC "!le; total trans" THEN
+  REPEAT GEN_TAC THEN INTRO_TAC "fil1 sor1 fil2 sor2 app" THEN
+  REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC) THEN
+  REWRITE_TAC[SORT] THEN CONJ_TAC THENL
+  [REWRITE_TAC[PERMUTED_COUNT; COUNT; COUNT_APPEND] THEN FIX_TAC "[y]" THEN
+   HYP_TAC "sor1: c1 _" (REWRITE_RULE[SORT; PERMUTED_COUNT]) THEN
+   HYP_TAC "sor2: c2 _" (REWRITE_RULE[SORT; PERMUTED_COUNT]) THEN
+   REMOVE_THEN "c1" (fun th -> REWRITE_TAC[GSYM th]) THEN
+   REMOVE_THEN "c2" (fun th -> REWRITE_TAC[GSYM th]) THEN
+   REWRITE_TAC[COUNT_FILTER] THEN
+   ASM_CASES_TAC `le (y:A) (x:A):bool` THEN ASM_REWRITE_TAC[] THEN ARITH_TAC;
+   ALL_TAC] THEN
+  HYP_TAC "sor1: fil1 ord1" (REWRITE_RULE[SORT]) THEN
+  HYP_TAC "sor2: fil2 ord2" (REWRITE_RULE[SORT]) THEN
+  ASM_REWRITE_TAC[ORDERED_APPEND; ORDERED_CONS] THEN
+  CONJ_TAC THENL
+  [REMOVE_THEN "fil2" (fun th -> REWRITE_TAC[MATCH_MP PERMUTED_ALL
+       (ONCE_REWRITE_RULE[PERMUTED_SYM] th)]) THEN
+   REWRITE_TAC[ALL_FILTER; GSYM ALL_MEM] THEN
+   HYP MESON_TAC "total" [];
+   ALL_TAC] THEN
+  REMOVE_THEN "fil1" (fun th -> REWRITE_TAC[MATCH_MP PERMUTED_ALL
+      (ONCE_REWRITE_RULE[PERMUTED_SYM] th)]) THEN
+  REWRITE_TAC[ALL_FILTER] THEN GEN_REWRITE_TAC I [GSYM ALL_MEM] THEN
+  REWRITE_TAC[ALL] THEN INTRO_TAC "![y]; y; xy" THEN
+  ASM_REWRITE_TAC[] THEN
+  REMOVE_THEN "fil2" (fun th -> REWRITE_TAC[MATCH_MP PERMUTED_ALL
+      (ONCE_REWRITE_RULE[PERMUTED_SYM] th)]) THEN
+  REWRITE_TAC[ALL_FILTER; GSYM ALL_MEM] THEN ASM_MESON_TAC[]);;
+
+let NUM_QUICKSORT = prove
+ (`SORT ((<=):num->num->bool) [] [] /\
+   (!x xs ys xs1 xs2 ys1 ys2.
+      FILTER (\y. y <= x) xs = xs1 /\
+      SORT (<=) xs1 ys1 /\
+      FILTER (\y. ~(y <= x)) xs = xs2 /\
+      SORT (<=) xs2 ys2 /\
+      APPEND ys1 (CONS x ys2) = ys
+      ==> SORT ((<=):num->num->bool) (CONS x xs) ys)`,
+  MATCH_MP_TAC QUICKSORT THEN ARITH_TAC);;
+
+let LIST_NUM_REFL = MESON [] `!l:num list. l = l`;;
+
+let quicksort_solver =
+  (solve o PROLOG_SLV)
+    (CONJUNCTS NUM_QUICKSORT @
+     [NUM_APPEND_NIL; NUM_APPEND_CONS] @
+     CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN));;
+
+take 10 (quicksort_solver `??ys. SORT (<=) [] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [3] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [3;1] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [1;3] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [3;3] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] ys`);;
+
+take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] (CONS 3 ys)`);;
+take 10 (quicksort_solver `??y ys. SORT (<=) [12;3;3;23;7;9;12] (CONS y ys)`);;
+take 10 (quicksort_solver `??ys zs. SORT (<=) [7;3;0] (APPEND ys zs)`);;
+
+take 10 (quicksort_solver `??xs ys. APPEND xs ys = [1;2;3]`);;
+
+(* ========================================================================= *)
+(* Hic sunt leones.                                                          *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Reverse.                                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let NUM_REVERSE_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 REVERSE);;
+
+let REVERSE_HORN = prove
+ (`!x:A xs ys zs. REVERSE xs = ys /\ APPEND ys [x] = zs
+                  ==> REVERSE (CONS x xs) = zs`,
+  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
+
+let REVERSE_MIXED_HORN = prove
+ (`!x:A xs ys. REVERSE xs = ys ==> REVERSE (CONS x xs) = APPEND ys [x]`,
+  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
+
+let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
+let NUM_REVERSE_MIXED_HORN = INST_TYPE [`:num`,aty] REVERSE_MIXED_HORN;;
+
+let PURE_REVERSE_SLV : solver =
+  let rec reverse_ktac g =
+    korelse_ (ACCEPT_SLV NUM_REVERSE_NIL)
+             (THEN_SLV (RULE_SLV NUM_REVERSE_MIXED_HORN)
+                     reverse_ktac)
+             g in
+  reverse_ktac;;
+
+let REVERSE_SLV : solver =
+  let rec reverse_ktac g =
+    korelse_ (ACCEPT_SLV NUM_REVERSE_NIL)
+             (THEN_SLV (RULE_SLV NUM_REVERSE_HORN)
+                     (THENL_SLV (TACTIC_SLV CONJ_TAC)
+                              [reverse_ktac;
+                               THEN_SLV (TACTIC_SLV (REWRITE_TAC[APPEND]))
+                                      REFL_SLV]))
+             g in
+  reverse_ktac;;
+
+(* Attenzione: Il rewrite non ha effetto! *)
+let REVERSE_MIXED_SLV : solver =
+  let rec reverse_ktac g =
+    korelse_ (THEN_SLV (RULE_SLV NUM_REVERSE_MIXED_HORN)
+                     reverse_ktac)
+             (THEN_SLV (THEN_SLV (TACTIC_SLV (REWRITE_TAC[APPEND])) REFL_SLV)
+                     (ACCEPT_SLV NUM_REVERSE_NIL))
+             g in
+  reverse_ktac;;
+
+kprove(`??ys. REVERSE [1;2;3] = ys`, REFL_SLV);;
+kprove(`??ys. REVERSE [1;2;3] = ys`, REVERSE_SLV);;
+kprove(`??ys. REVERSE [1;2;3] = ys`, PURE_REVERSE_SLV);;
+kprove(`??ys. REVERSE [1;2;3] = ys`, REVERSE_MIXED_SLV);;
+
+(* ------------------------------------------------------------------------- *)
+(* Lenght.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let CONJ_SLV : solver = TACTIC_SLV CONJ_TAC;;
+let NUM_REDUCE_SLV : solver = TACTIC_SLV NUM_REDUCE_TAC;;
+
+let CONJ_RULE_SLV : thm_solver =
+  fun th -> THEN_SLV (RULE_SLV th) (TACTIC_SLV (REPEAT CONJ_TAC));;
+
+let NUM_LENGHT_HORN = prove
+ (`LENGTH ([]:num list) = 0 /\
+  (!h:num t n m. LENGTH t = m /\ n = SUC m ==> LENGTH (CONS h t) = n)`,
+  REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
+
+let NUM_LENGHT_NIL, NUM_LENGHT_CONS_HORN = CONJ_PAIR NUM_LENGHT_HORN;;
+
+let LENGTH_SLV : solver =
+  let rec length_ktac g =
+    korelse_ (ACCEPT_SLV NUM_LENGHT_NIL)
+             (THENL_SLV (CONJ_RULE_SLV NUM_LENGHT_CONS_HORN)
+                      [length_ktac;
+                       THEN_SLV NUM_REDUCE_SLV
+                              REFL_SLV])
+             g in
+  length_ktac;;
+
+set_kanren_goal `??n. LENGTH [1;2;3] = n`; p();;
+ke LENGTH_SLV;;
+ktop_thm();;
+
+kprove(`??n. LENGTH [1;2;3] = n`, LENGTH_SLV);;
+kprove(`??x:num xs. LENGTH (CONS x xs) = 1`, LENGTH_SLV);;
+kprove(`??xs:num list. LENGTH xs = 1`, LENGTH_SLV);;
+
+(* Do not work!  Our THENL_SLV do not perform backtracking from one branch
+   to the previous ones. *)
+(*;;
+kprove(`??xs:num list. LENGTH xs = SUC (SUC 0)`, LENGTH_SLV);;
+
+set_kanren_goal `??xs:num list. LENGTH xs = SUC (SUC 0)`; p();;
+ke (CONJ_RULE_SLV NUM_LENGHT_CONS_HORN);;
+ke (ACCEPT_SLV NUM_LENGHT_NIL);;
+ke (THEN_SLV NUM_REDUCE_SLV REFL_SLV);;
+ke (THEN_SLV (KTRY (CONV_SLV (RAND_CONV NUM_SUC_CONV))) REFL_SLV);;
+ktop_thm();;
+*)
