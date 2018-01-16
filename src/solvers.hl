@@ -62,14 +62,14 @@ let solve : solver -> term -> (term list * thm) stream =
     stream_map p (run_solver (dest_mgoal tm) slv);;
 
 (* ------------------------------------------------------------------------- *)
-(* Common pattern for building "singleton" strategies.                       *)
+(* Common pattern for building "singleton" solvers.                          *)
 (* ------------------------------------------------------------------------- *)
 
 let SOLVER (f:term list -> goal -> goalstate) : solver =
   fun mvs,gl -> try singleton (f mvs gl) with Failure _ -> empty;;
 
 (* ------------------------------------------------------------------------- *)
-(* Basic strategies.                                                         *)
+(* Basic solvers.                                                            *)
 (* ------------------------------------------------------------------------- *)
 
 let NO_SLV : solver =
@@ -94,11 +94,11 @@ let SPEC_FRESH_ALL = splitlist SPEC_FRESH;;
 
 let ACCEPT_SLV : thm_solver =
   fun th -> SOLVER (fun mvs (asl,w) ->
-let vs,th' = SPEC_FRESH_ALL th in
-    let inst = term_unify (union vs mvs) (concl th') w in
+    let avs,th' = SPEC_FRESH_ALL th in
+    let inst = term_unify (union avs mvs) (concl th') w in
     let sth = INSTANTIATE inst th' in
     let just i _ = INSTANTIATE_ALL i sth in
-    ([],inst),[],just);;
+    (avs,inst),[],just);;
 
 let RULE_SLV : thm_solver = fun th ->
  if not(is_imp(snd(strip_forall(concl th)))) then
@@ -117,25 +117,39 @@ let RULE_SLV : thm_solver = fun th ->
          (report(string_of_thm (CONJ (INSTANTIATE_ALL i sth) th));
           fail())
        in
-     (evs,inst),[asl,lant],just);;
+     (avs,inst),[asl,lant],just);;
 
 let SAFE_RULE_SLV : thm_solver =
   fun th -> try RULE_SLV th with Failure _ -> NO_SLV;;
 
 (* ------------------------------------------------------------------------- *)
-(* Strategies associated to tactics.                                         *)
+(* Solvers associated to tactics.                                            *)
 (* ------------------------------------------------------------------------- *)
 
 let TACTIC_SLV (tac:tactic) : solver =
   SOLVER (fun _ gl -> tac gl);;
 
+let THM_TACTIC_SLV (tac:thm_tactic) : thm_solver =
+  fun th -> TACTIC_SLV (tac th);;
+
 let ALL_SLV = TACTIC_SLV ALL_TAC;;
-
 let CONJ_SLV = TACTIC_SLV CONJ_TAC;;
-
+let CONTR_SLV = THM_TACTIC_SLV CONTR_TAC;;
+let CONV_SLV conv = TACTIC_SLV (CONV_TAC conv);;
+let DISCH_SLV = TACTIC_SLV DISCH_TAC;;
 let DISJ1_SLV = TACTIC_SLV DISJ1_TAC;;
-
 let DISJ2_SLV = TACTIC_SLV DISJ2_TAC;;
+let EQ_SLV = TACTIC_SLV EQ_TAC;;
+let GEN_SLV = TACTIC_SLV GEN_TAC;;
+
+(* ------------------------------------------------------------------------- *)
+(* Further basic solvers.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let UNDISCH_THEN_SLV : term -> thm_solver -> solver =
+  fun tm tslv (mvs,(asl,w)) ->
+    let thp,asl' = remove (fun (_,th) -> aconv (concl th) tm) asl in
+    tslv (snd thp) (mvs,(asl',w));;
 
 (* ------------------------------------------------------------------------- *)
 (* Solver combinators.                                                       *)
@@ -152,19 +166,22 @@ let THEN_SLV,THENL_SLV =
    | ((slv:solver)::slvs),((goal:goal)::goals) ->
        bind (slv (mvs,goal)) (fun (mvs1,insts1),gls1,just1 ->
          let goals' = map (inst_goal insts1) goals in
-         bind (seqapply (union mvs1 mvs) slvs goals')
+         stream_map
            (fun (mvs2,insts2),gls2,just2 ->
              let just1' i = just1 (compose_insts i insts2) in
-             singleton ((union mvs1 mvs2,compose_insts insts1 insts2),
-                        gls1@gls2,compose_justs (length gls1) just1' just2)))
+             ((union mvs1 mvs2,compose_insts insts1 insts2),
+              gls1@gls2,compose_justs (length gls1) just1' just2))
+           (seqapply (union mvs1 mvs) slvs goals'))
    | _,_ -> failwith "seqapply: Length mismatch" in
   let justsequence just1 just2 insts2 i ths =
     just1 (compose_insts insts2 i) (just2 i ths) in
   let slvsequence mvs ((mvs1,insts1),gls1,just1) slvl =
-    bind (seqapply (union mvs1 mvs) slvl gls1) (fun (mvs2,insts2),gls2,just2 ->
-      let jst = justsequence just1 just2 insts2 in
-      let just = if gls2 = [] then propagate_thm (jst null_inst []) else jst in
-      singleton((union mvs1 mvs2,compose_insts insts1 insts2),gls2,just)) in
+    stream_map (fun (mvs2,insts2),gls2,just2 ->
+                  let jst = justsequence just1 just2 insts2 in
+                  let just = if gls2 <> [] then jst else
+                             propagate_thm (jst null_inst []) in
+                  (union mvs1 mvs2,compose_insts insts1 insts2),gls2,just)
+               (seqapply (union mvs1 mvs) slvl gls1) in
   let (THEN_SLV: solver -> solver -> solver) =
     fun slv1 slv2 (mvs,_ as g) ->
       bind (slv1 g) (fun _,gls,_ as gstate ->
@@ -189,10 +206,11 @@ take 10 (solve (THENL_SLV CONJ_SLV [ACCEPT_SLV ADD_SYM; REFL_SLV])
 take 10 (solve (THENL_SLV CONJ_SLV [REFL_SLV; ACCEPT_SLV ADD_SYM])
   `??m n. m + n = n + m /\ n + n = n + 1`);;
 
-MOD_0;;
 take 10 (solve (THEN_SLV (RULE_SLV MOD_0) (ACCEPT_SLV (ASSUME `~(b = 0)`)))
   `??a b c. ~(b = 0) ?- a MOD b = c`);;
 
+(* ------------------------------------------------------------------------- *)
+(* Parallel combination of solvers.                                          *)
 (* ------------------------------------------------------------------------- *)
 
 let ORELSE_SLV (slv1:solver) (slv2:solver) : solver =
@@ -223,8 +241,13 @@ let CHANGED_SLV (slv:solver) : solver =
          meta,[gl],_ when meta = null_meta && equals_goal gl g -> empty
        | gstate -> singleton gstate);;
 
+let APPLY_SLV : thm_solver =
+  fun th -> try let rule = RULE_SLV th in
+                ORELSE_SLV (ACCEPT_SLV th) rule
+            with Failure _ -> ACCEPT_SLV th;;
+
 (* ------------------------------------------------------------------------- *)
-(* Varianti bilanciate.                                                      *)
+(* Parallel (fair) combination of solvers.                                   *)
 (* ------------------------------------------------------------------------- *)
 
 let MPLUS_SLV (slv1:solver) (slv2:solver) : solver =
@@ -236,16 +259,21 @@ let MPLUS_LIST_SLV : solver list -> solver =
 let MAP_MPLUS_LIST_SLV slvf lst =
   MPLUS_LIST_SLV (map slvf lst);;
 
+let MPLUS_ASSUM_SLV : thm_solver -> solver =
+  fun tslv (mvs,(asl,w) as g) -> MAP_MPLUS_LIST_SLV (tslv o snd) asl g;;
+
+let MPLUS_X_ASSUM : thm_solver -> solver =
+  fun tslv -> MPLUS_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
+
 (* ------------------------------------------------------------------------- *)
 (* Tactics to augment assumption list.                                       *)
 (* ------------------------------------------------------------------------- *)
 
 let (LABEL_SLV: string -> thm_solver) =
-  fun s thm (mvs,(asl,w)) ->
-    let just i (th::_) = PROVE_HYP (INSTANTIATE_ALL i thm) th in
-    singleton(null_meta,[(s,thm)::asl,w],just);;
+  fun s th -> TACTIC_SLV (LABEL_TAC s th);;
 
-let ASSUME_SLV = LABEL_SLV "";;
+let ASSUME_SLV : thm_solver =
+  fun th -> TACTIC_SLV (ASSUME_TAC th);;
 
 (* ------------------------------------------------------------------------- *)
 (* Manipulation of assumption list.                                          *)
@@ -286,63 +314,49 @@ let RULE_ASSUM_SLV : (thm -> thm) -> solver =
 (* A simple Prolog-like solver.                                              *)
 (* ------------------------------------------------------------------------- *)
 
-(*
-let APPLY_SLV : thm_solver =
-  fun th -> try let rule = RULE_SLV th in
-                ORELSE_SLV (ACCEPT_SLV th) rule
-            with Failure _ -> ACCEPT_SLV th;;
-*)
-
 let PROLOG_SLV thl : solver =
-  let rec PROLOG =
-    fun g -> MAP_FIRST_SLV APPLY_SLV thl g
-  and APPLY_SLV : thm_solver =
+  let rec PROLOG_SLV g = MAP_FIRST_SLV STEP_SLV thl g
+  and STEP_SLV : thm_solver =
     fun th -> try let rule = RULE_SLV th in
-                      EVERY_SLV [rule; REPEAT_SLV CONJ_SLV; PROLOG]
+                      EVERY_SLV [rule; REPEAT_SLV CONJ_SLV; PROLOG_SLV]
               with Failure _ -> ACCEPT_SLV th in
-  THEN_SLV (REPEAT_SLV CONJ_SLV) PROLOG;;
+  THEN_SLV (REPEAT_SLV CONJ_SLV) PROLOG_SLV;;
 
 (* ------------------------------------------------------------------------- *)
 (* Tests and examples.                                                       *)
 (* ------------------------------------------------------------------------- *)
 
-take 10
+let sols = take 10
   (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
-         `??a b:A. 
+         `??a b:A.
              (!x y z. padre x y /\ antenato y z ==> antenato x z) &&
              (!x y. padre x y ==> antenato x y) &&
              padre pippo pluto && padre pluto paperino
              ?- antenato a b`);;
-let sols = it;;
 map (concl o snd) sols;;
-length it;;
 
-take 10
+let sols = take 10
   (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
-         `??a b:A. 
+         `??a b:A.
              (!x y z. padre x y /\ antenato y z ==> antenato x z) &&
              (!x. antenato x x) &&
              padre pippo pluto && padre pluto paperino
              ?- antenato a b`);;
-let sols = it;;
 map (concl o snd) sols;;
-length it;;
 
-take 10
+let sols = take 10
   (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
-         `??a b:A. 
+         `??a b:A.
              (!x y z. persona z /\ padre x y /\ antenato y z ==> antenato x z) &&
              (!x. persona x ==> antenato x x) &&
              padre pippo pluto && padre pluto paperino &&
              persona pippo && persona pluto && persona paperino
              ?- antenato a b`);;
-let sols = it;;
 map (concl o snd) sols;;
-length it;;
 
 (setify o map (concl o snd) o take 100 o
  solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
-  `??a b:A. 
+  `??a b:A.
       (!x y z. antenato x y /\ antenato y z ==> antenato x z) &&
       (!x. antenato x x) &&
       (!x y. padre x y ==> antenato x y) &&

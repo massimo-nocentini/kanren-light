@@ -1,3 +1,2 @@
-loadt "ktactics.hl";;
-loadt "examples.hl";;
-loadt "lists.hl";;
+loadt "streams.hl";;
+loadt "solvers.hl";;
