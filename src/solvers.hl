@@ -129,8 +129,9 @@ let SAFE_RULE_SLV : thm_solver =
 let TACTIC_SLV (tac:tactic) : solver =
   SOLVER (fun _ gl -> tac gl);;
 
-let THM_TACTIC_SLV (tac:thm_tactic) : thm_solver =
-  fun th -> TACTIC_SLV (tac th);;
+let THM_TACTIC_SLV (ttac:thm_tactic) : thm_solver =
+  fun th -> try let tac = ttac th in TACTIC_SLV tac
+            with Failure _ -> NO_SLV;;
 
 let ALL_SLV = TACTIC_SLV ALL_TAC;;
 let CONJ_SLV = TACTIC_SLV CONJ_TAC;;
@@ -254,7 +255,8 @@ let MPLUS_SLV (slv1:solver) (slv2:solver) : solver =
   fun g -> mplusf (slv1 g) (fun _ -> slv2 g);;
 
 let MPLUS_LIST_SLV : solver list -> solver =
-  fun slvl g -> end_itlist MPLUS_SLV slvl g;;
+  fun slvl g -> if slvl = [] then empty else
+                end_itlist MPLUS_SLV slvl g;;
 
 let MAP_MPLUS_LIST_SLV slvf lst =
   MPLUS_LIST_SLV (map slvf lst);;
@@ -262,7 +264,7 @@ let MAP_MPLUS_LIST_SLV slvf lst =
 let MPLUS_ASSUM_SLV : thm_solver -> solver =
   fun tslv (mvs,(asl,w) as g) -> MAP_MPLUS_LIST_SLV (tslv o snd) asl g;;
 
-let MPLUS_X_ASSUM : thm_solver -> solver =
+let MPLUS_X_ASSUM_SLV : thm_solver -> solver =
   fun tslv -> MPLUS_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
 
 (* ------------------------------------------------------------------------- *)
