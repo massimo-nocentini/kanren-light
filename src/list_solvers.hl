@@ -2,6 +2,8 @@
 (* Examples with list of numbers.                                            *)
 (* ========================================================================= *)
 
+needs "solvers.hl";;
+
 type_invention_warning := false;;
 needs "Permutation/make.ml";;
 type_invention_warning := true;;

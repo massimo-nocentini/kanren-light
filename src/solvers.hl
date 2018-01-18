@@ -84,6 +84,7 @@ let REFL_SLV =
     ([],inst),[],just);;
 
 take 10 (solve REFL_SLV `??m n. m + n = 1 + 2`);;
+take 10 (solve REFL_SLV `??m n. m + n = a + b`);;
 
 let SPEC_FRESH th =
   let v,th' = SPEC_VAR th in
