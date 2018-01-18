@@ -43,10 +43,10 @@ let get : 'a stream -> 'a =
     Empty -> failwith "Empty stream"
   | Cons (x,_) -> x;;
 
-let rec take n =
+let take (n:int) : 'a stream -> 'a list =
   function
-    Empty -> []
-  | Cons (x,s) -> if n > 0 then x :: take (n-1) (s ()) else [];;
+    Cons(x,f) when n > 0 -> x :: if n = 1 then [] else take (n-1) (f())
+  | _ -> [];;
 
 let rec stream_map (f : 'a -> 'b) (s : 'a stream) : 'b stream =
   match s with
