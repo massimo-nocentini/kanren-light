@@ -6,11 +6,6 @@
 (* Solvers associated to tactics.                                            *)
 (* ------------------------------------------------------------------------- *)
 
-(*
-let CONJUNCTS_THEN_SLV (tslv:thm_solver) : thm_solver =
-  fun cth -> THEN_SLV (tslv(CONJUNCT1 cth)) (tslv(CONJUNCT2 cth));;
-*)
-
 let UNIFY_ACCEPT_SLV th = SOLVER (fun mvs -> UNIFY_ACCEPT_TAC mvs th);;
 
 (* ========================================================================= *)
@@ -62,7 +57,7 @@ let IMPLICATE_SLV = TACTIC_SLV IMPLICATE_TAC;;
     DISJ_CASES_TAC;                                               (* or     *)
     CHOOSE_TAC;                                                   (* exists *)
     (fun th -> ASSUME_TAC (EQ_MP (IMPLICATE (concl th)) th));     (* not    *)
-    (CONJUNCTS_THEN' MP_TAC o uncurry CONJ  o EQ_IMP_RULE)];;     (* iff    *)
+    (CONJUNCTS_THEN' MP_TAC o uncurry CONJ o EQ_IMP_RULE)];;      (* iff    *)
 
   let RIGHT_REVERSIBLE_SLV = TACTIC_SLV RIGHT_REVERSIBLE_TAC
   and LEFT_REVERSIBLE_SLV : thm_solver = THM_TACTIC_SLV LEFT_REVERSIBLE_TAC;;
@@ -72,7 +67,7 @@ let META_SPEC_SLV : thm_solver =
     let gv = genvar(type_of(fst(dest_forall(concl th)))) in
     (ASSUME_TAC th THEN META_SPEC_TAC gv th) g);;
 
-let DISJ_SLV : solver = MPLUS_SLV DISJ1_SLV DISJ2_SLV;;
+let DISJ_SLV : solver = ORELSE_SLV DISJ1_SLV DISJ2_SLV;;
 
 let X_META_EXISTS_SLV : solver =
   TACTIC_SLV (fun asl,w as g ->
@@ -85,6 +80,7 @@ let ASM_ANT_TAC : thm_tactic =
 
 let ASM_ANT_SLV = THM_TACTIC_SLV ASM_ANT_TAC;;
 
+(*
   let rec ITAUT_SLV n gl =
     report ("Deep: "^string_of_int n);
     let mvs,(asl,w) = gl in
@@ -96,18 +92,70 @@ let ASM_ANT_SLV = THM_TACTIC_SLV ASM_ANT_TAC;;
        THEN_SLV RIGHT_REVERSIBLE_SLV (ITAUT_SLV (n+1));
        THEN_SLV (MPLUS_X_ASSUM_SLV LEFT_REVERSIBLE_SLV) (ITAUT_SLV (n+1));
        MPLUS_X_ASSUM_SLV(fun th ->
-         EVERY_SLV [ASSUME_SLV th; META_SPEC_SLV th; (ITAUT_SLV (n+1))]);
+         EVERY_SLV [META_SPEC_SLV th; (ITAUT_SLV (n+1))]);
        THEN_SLV DISJ_SLV (ITAUT_SLV (n+1));
        THEN_SLV X_META_EXISTS_SLV (ITAUT_SLV (n+1));
        THEN_SLV (MPLUS_ASSUM_SLV ASM_ANT_SLV) (ITAUT_SLV (n+1))] gl;;
 
 let ITAUT_SLV = ITAUT_SLV 0;;
+*)
+
+let ITAUT0_SLV =
+  FIRST_SLV [ACCEPT_SLV TRUTH;
+             FIRST_ASSUM_SLV UNIFY_ACCEPT_SLV;
+             FIRST_ASSUM_SLV CONTR_SLV];;
+
+let ITAUT1_SLV g =
+  FIRST_SLV [RIGHT_REVERSIBLE_SLV;
+             FIRST_X_ASSUM_SLV LEFT_REVERSIBLE_SLV;
+             FIRST_X_ASSUM_SLV META_SPEC_SLV;
+             DISJ_SLV;
+             X_META_EXISTS_SLV;
+             FIRST_X_ASSUM_SLV ASM_ANT_SLV] g);;
+
+let rec ITAUT_SLV : solver =
+  fun gl -> concatf (ITAUT0_SLV gl)
+                    (fun () -> THEN_SLV ITAUT1_SLV ITAUT_SLV gl);;
+
+let counter = ref 40;;
+
+let ITAUT_SLV : solver =
+  let rec ITAUT_SLV n gl =
+    (* if !counter <= 0 then failwith "Stop" else *)
+    counter := !counter - 1;
+    report ("Counter "^string_of_int !counter);
+    ((report ("Deep: "^string_of_int n);
+      let mvs,(asl,w) = gl in print_goal (asl,w)));
+    concatf (ITAUT0_SLV gl)
+            (fun () -> THEN_SLV ITAUT1_SLV (ITAUT_SLV (n+1)) gl) in
+  let ITAUT_SLV' n gl =
+    let s = ITAUT_SLV n gl in
+    (match s with
+       Empty -> report "Fail!";
+     | Cons ((_,gls,_),_) -> if gls = [] then report "Finished!");
+    s in
+  ITAUT_SLV' 0;;
+
+let ITAUT_SLV : solver =
+  let rec ITAUT_SLV n gl =
+    report ("Deep: "^string_of_int n);
+    concatf (ITAUT0_SLV gl)
+            (fun () -> THEN_SLV ITAUT1_SLV (ITAUT_SLV (n+1)) gl) in
+  let ITAUT_SLV' n gl =
+    let s = ITAUT_SLV n gl in
+    (match s with
+       Empty -> report "Fail!";
+     | Cons ((_,gls,_),_) -> if gls = [] then report "Finished!");
+    s in
+  ITAUT_SLV' 0;;
 
 let gstate::_ = take 10 (ITAUT_SLV ([],([],`F ==> a`)));;
 let gstate::_ = take 10 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
 let gstate::_ = take 10 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
-let gstate::_ = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
+let [] = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
 wrapup gstate;;
+
+take 10 (stream_map wrapup (ITAUT_SLV ([`a:bool`],(["",ASSUME `F`],`a:bool`))));;
 
 time TAUT
  `(~input_a ==> (internal <=> T)) /\
@@ -116,6 +164,69 @@ time TAUT
   (input_b ==> (output <=> F))
   ==> (output <=> ~(input_a \/ input_b))`;;
 
+counter := 40;;
+let gstate :: _ = time (take 1 o ITAUT_SLV)
+([],([],
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F)) /\
+  output
+  ==> ~(input_a \/ input_b)`));;
+wrapup gstate;;
+
+counter := 100;;
+let gstate :: _ = time (take 1 o ITAUT_SLV)
+([],([],
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F)) /\
+  ~input_a /\ ~input_b
+  ==> output`));;
+wrapup gstate;;
+
+time (take 1 o ITAUT_SLV)
+([],([],
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  ~input_a /\ ~input_b
+  ==> output`));;
+
+time (take 1 o ITAUT_SLV)
+([],([],
+ `(internal <=> T) /\
+  (~input_b ==> (output <=> internal)) /\
+  ~input_a /\ ~input_b
+  ==> output`));;
+
+time (take 1 o ITAUT_SLV)
+([],([],
+ `(~input_b ==> (output <=> internal)) /\
+  (internal <=> T) /\
+  ~input_a /\ ~input_b
+  ==> output`));;
+
+time (take 1 o ITAUT_SLV)
+([],([],
+ `(~input_a ==> (internal <=> T)) /\
+  ~input_a
+  ==> output`));;
+
+time (take 1 o ITAUT_SLV)
+([],([],
+ `(~input_a ==> (internal <=> T)) /\
+  (output <=> internal) /\
+  ~input_a /\ ~input_b
+  ==> output`));;
+
+time (take 1 o ITAUT_SLV)
+([],([],
+ `(internal <=> T) /\
+  (output <=> internal) /\
+  ~input_a /\ ~input_b
+  ==> output`));;
+
 time (take 1 o ITAUT_SLV)
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
@@ -123,7 +234,6 @@ time (take 1 o ITAUT_SLV)
   (input_a ==> (output <=> F)) /\
   (input_b ==> (output <=> F))
   ==> (output <=> ~(input_a \/ input_b))`));;
-
 
 time TAUT
 `(i1 /\ i2 <=> a) /\
@@ -153,7 +263,6 @@ time TAUT
  (g \/ k <=> o2) /\
  (f \/ j <=> o3)
  ==> (o1 <=> ~i1) /\ (o2 <=> ~i2) /\ (o3 <=> ~i3)`;;
-
 
 time (take 1 o ITAUT_SLV)
 ([],([],
