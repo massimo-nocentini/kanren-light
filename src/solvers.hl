@@ -226,8 +226,8 @@ let rec REPEAT_SLV slv g =
 let EVERY_SLV slvl =
   itlist THEN_SLV slvl ALL_SLV;;
 
-let FIRST_SLV : solver list -> solver =
-  fun slvl g -> end_itlist ORELSE_SLV slvl g;;
+let FIRST_SLV (slvl:solver list) : solver =
+  if slvl = [] then NO_SLV else end_itlist ORELSE_SLV slvl;;
 
 let MAP_EVERY_SLV slvf lst =
   EVERY_SLV (map slvf lst);;
@@ -301,7 +301,10 @@ let EVERY_ASSUM_SLV : thm_solver -> solver =
   fun tslv -> ASSUM_LIST_SLV (MAP_EVERY_SLV tslv);;
 
 let FIRST_ASSUM_SLV : thm_solver -> solver =
-  fun tslv (_,(asl,_) as g) -> tryfind (fun (_,th) -> tslv th g) asl;;
+  fun tslv (mvs,(asl,w) as g) -> MAP_FIRST_SLV (tslv o snd) asl g;;
+
+let FIRST_X_ASSUM_SLV : thm_solver -> solver =
+  fun tslv -> FIRST_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
 
 let USE_ASSUM_SLV : thm_solver -> solver =
   fun tslv (_,(asl,_) as g) -> MAP_FIRST_SLV (fun (_,th) -> tslv th) asl g;;
@@ -364,3 +367,17 @@ map (concl o snd) sols;;
       (!x y. padre x y ==> antenato x y) &&
       padre pippo pluto && padre pluto paperino
       ?- antenato a b`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Esempio di un caso in cui con le eccezioni non si troverebbe nessuna      *)
+(* soluzione.                                                                *)
+(* Infatti, con le eccezioni, dopo aver trovato la soluzione parziale        *)
+(* `padre a b`, non si saprebbe come continuare.                             *)
+(* ------------------------------------------------------------------------- *)
+
+(map (concl o snd) o take 100 o solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
+  `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
+          padre c d &&
+          padre a c &&
+          padre a b
+          ?- nonno a x`;;
