@@ -374,6 +374,10 @@ map (concl o snd) sols;;
 (* soluzione.                                                                *)
 (* Infatti, con le eccezioni, dopo aver trovato la soluzione parziale        *)
 (* `padre a b`, non si saprebbe come continuare.                             *)
+(* In questo caso, il punto cruciale è come procedere per risolvere una      *)
+(* congiunzione: la struttura """CONJ_TAC THEN PROLOG_TAC""" non permette,   *)
+(* una volta trovata una unficazione sulla prima "branch" di ritrattarla se  *)
+(* la seconda branch fallisce.                                               *)
 (* ------------------------------------------------------------------------- *)
 
 (map (concl o snd) o take 100 o solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
