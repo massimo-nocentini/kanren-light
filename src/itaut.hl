@@ -80,89 +80,67 @@ let ASM_ANT_TAC : thm_tactic =
 
 let ASM_ANT_SLV = THM_TACTIC_SLV ASM_ANT_TAC;;
 
-(*
-  let rec ITAUT_SLV n gl =
-    report ("Deep: "^string_of_int n);
-    let mvs,(asl,w) = gl in
-    print_goal (asl,w);
-    MPLUS_LIST_SLV
-      [MPLUS_ASSUM_SLV UNIFY_ACCEPT_SLV;
-       ACCEPT_SLV TRUTH;
-       MPLUS_ASSUM_SLV CONTR_SLV;
-       THEN_SLV RIGHT_REVERSIBLE_SLV (ITAUT_SLV (n+1));
-       THEN_SLV (MPLUS_X_ASSUM_SLV LEFT_REVERSIBLE_SLV) (ITAUT_SLV (n+1));
-       MPLUS_X_ASSUM_SLV(fun th ->
-         EVERY_SLV [META_SPEC_SLV th; (ITAUT_SLV (n+1))]);
-       THEN_SLV DISJ_SLV (ITAUT_SLV (n+1));
-       THEN_SLV X_META_EXISTS_SLV (ITAUT_SLV (n+1));
-       THEN_SLV (MPLUS_ASSUM_SLV ASM_ANT_SLV) (ITAUT_SLV (n+1))] gl;;
-
-let ITAUT_SLV = ITAUT_SLV 0;;
-*)
-
 let ITAUT0_SLV =
-  FIRST_SLV [ACCEPT_SLV TRUTH;
-             FIRST_ASSUM_SLV UNIFY_ACCEPT_SLV;
-             FIRST_ASSUM_SLV CONTR_SLV];;
+  FIRST_SLV [UNIFY_ACCEPT_SLV TRUTH;
+             FIRST_ASSUM_SLV CONTR_SLV;
+             FIRST_ASSUM_SLV UNIFY_ACCEPT_SLV];;
 
-let ITAUT1_SLV g =
-  FIRST_SLV [RIGHT_REVERSIBLE_SLV;
-             FIRST_X_ASSUM_SLV LEFT_REVERSIBLE_SLV;
-             FIRST_X_ASSUM_SLV META_SPEC_SLV;
-             DISJ_SLV;
-             X_META_EXISTS_SLV;
-             FIRST_X_ASSUM_SLV ASM_ANT_SLV] g);;
+let CLARIFY_TAC : tactic =
+  RIGHT_REVERSIBLE_TAC ORELSE FIRST_X_ASSUM LEFT_REVERSIBLE_TAC;;
 
-let rec ITAUT_SLV : solver =
-  fun gl -> concatf (ITAUT0_SLV gl)
-                    (fun () -> THEN_SLV ITAUT1_SLV ITAUT_SLV gl);;
+let PREPARE_TAC : tactic = CLARIFY_TAC THEN REPEAT CLARIFY_TAC;;
 
-let counter = ref 40;;
+let debug_itaut_slv = ref false;;
 
-let ITAUT_SLV : solver =
-  let rec ITAUT_SLV n gl =
-    (* if !counter <= 0 then failwith "Stop" else *)
-    counter := !counter - 1;
-    report ("Counter "^string_of_int !counter);
-    ((report ("Deep: "^string_of_int n);
-      let mvs,(asl,w) = gl in print_goal (asl,w)));
-    concatf (ITAUT0_SLV gl)
-            (fun () -> THEN_SLV ITAUT1_SLV (ITAUT_SLV (n+1)) gl) in
-  let ITAUT_SLV' n gl =
-    let s = ITAUT_SLV n gl in
-    (match s with
-       Empty -> report "Fail!";
-     | Cons ((_,gls,_),_) -> if gls = [] then report "Finished!");
-    s in
-  ITAUT_SLV' 0;;
+let rec ITAUT_SLV n pg : solver =
+  fun g ->
+    let () = warn !debug_itaut_slv ("Depth: "^string_of_int n) in
+    let () = warn !debug_itaut_slv "Previous goal:" in
+    let () = if !debug_itaut_slv then print_goal(snd pg) else () in
+    let () = warn !debug_itaut_slv "Current goal:" in
+    let () = if !debug_itaut_slv then print_goal (snd g) else () in
+    let () = if !debug_itaut_slv then ignore (read_line()) else () in
+    if n < 0 then (remark "Too deep!"; NO_SLV g) else
+    FIRST_SLV
+      [ITAUT0_SLV;
+       THEN_SLV (TACTIC_SLV PREPARE_TAC) (ITAUT_SLV n g);
+       (if n >= 2
+        then THEN_SLV (FIRST_ASSUM_SLV META_SPEC_SLV) (ITAUT_SLV (n-2) g)
+        else (warn !debug_itaut_slv "Too deep!"; NO_SLV));
+       THEN_SLV DISJ1_SLV (ITAUT_SLV n g);
+       THEN_SLV DISJ2_SLV (ITAUT_SLV n g);
+       (if n >= 2
+        then (THEN_SLV X_META_EXISTS_SLV (ITAUT_SLV (n-2) g))
+        else (warn !debug_itaut_slv "Too deep!"; NO_SLV));
+       (if n >= 1
+        then THEN_SLV (FIRST_X_ASSUM_SLV ASM_ANT_SLV) (ITAUT_SLV (n-1) g)
+        else (warn !debug_itaut_slv "Too deep!"; NO_SLV))]
+      g;;
 
-let ITAUT_SLV : solver =
-  let rec ITAUT_SLV n gl =
-    report ("Deep: "^string_of_int n);
-    concatf (ITAUT0_SLV gl)
-            (fun () -> THEN_SLV ITAUT1_SLV (ITAUT_SLV (n+1)) gl) in
-  let ITAUT_SLV' n gl =
-    let s = ITAUT_SLV n gl in
-    (match s with
-       Empty -> report "Fail!";
-     | Cons ((_,gls,_),_) -> if gls = [] then report "Finished!");
-    s in
-  ITAUT_SLV' 0;;
+let rec ITAUT_ITER_SLV n : solver =
+  report("Search with depth "^string_of_int n);
+  ORELSE_SLV (fun g -> ITAUT_SLV n g g) (fun g -> ITAUT_ITER_SLV (n + 1) g);;
 
-let gstate::_ = take 10 (ITAUT_SLV ([],([],`F ==> a`)));;
-let gstate::_ = take 10 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
-let gstate::_ = take 10 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
+let ITAUT_SLV : solver = fun g -> ITAUT_ITER_SLV 0 g;;
+
+let gstate::_ = take 1 (ITAUT_SLV ([],([],`F ==> a`)));;
+let gstate::_ = take 1 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
+let gstate::_ = take 1 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
+let gstate::_ = take 1 (ITAUT_SLV ([`a:bool`],([],`a:bool`)));;
 let [] = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
+let gstate::ppp = take 10 (ITAUT_SLV ([`a:bool`],([],`~ ~a ==> a`)));;
 wrapup gstate;;
+
+map wrapup (take 20 (ITAUT_SLV ([`a:bool`],([],`a /\ b ==> b /\ a`))));;
 
 take 10 (stream_map wrapup (ITAUT_SLV ([`a:bool`],(["",ASSUME `F`],`a:bool`))));;
 
-time TAUT
+time ITAUT_TAC ([],
  `(~input_a ==> (internal <=> T)) /\
   (~input_b ==> (output <=> internal)) /\
   (input_a ==> (output <=> F)) /\
   (input_b ==> (output <=> F))
-  ==> (output <=> ~(input_a \/ input_b))`;;
+  ==> (output <=> ~(input_a \/ input_b))`);;
 
 counter := 40;;
 let gstate :: _ = time (take 1 o ITAUT_SLV)
@@ -176,7 +154,7 @@ let gstate :: _ = time (take 1 o ITAUT_SLV)
 wrapup gstate;;
 
 counter := 100;;
-let gstate :: _ = time (take 1 o ITAUT_SLV)
+let gstate :: _ = time (take 1 o THEN_SLV (TACTIC_SLV(PURE_REWRITE_TAC[MESON[] `~p <=> (p  ==> F)`])) (fun g -> ITAUT_SLV g))
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
   (~input_b ==> (output <=> internal)) /\

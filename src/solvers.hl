@@ -380,9 +380,17 @@ map (concl o snd) sols;;
 (* la seconda branch fallisce.                                               *)
 (* ------------------------------------------------------------------------- *)
 
+(*
+ITAUT `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
+       padre c d /\
+       padre a c /\
+       padre a b
+       ==> ?x:A. nonno a x`;;
+
 (map (concl o snd) o take 100 o solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
   `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
           padre c d &&
           padre a c &&
           padre a b
           ?- nonno a x`;;
+*)
