@@ -123,6 +123,13 @@ let RULE_SLV : thm_solver = fun th ->
 let SAFE_RULE_SLV : thm_solver =
   fun th -> try RULE_SLV th with Failure _ -> NO_SLV;;
 
+let CHANGED_SLV (slv:solver) : solver =
+  fun (_,g as mg) ->
+    bind (slv mg)
+      (function
+         meta,[gl],_ when meta = null_meta && equals_goal gl g -> empty
+       | gstate -> singleton gstate);;
+
 (* ------------------------------------------------------------------------- *)
 (* Solvers associated to tactics.                                            *)
 (* ------------------------------------------------------------------------- *)
@@ -212,64 +219,17 @@ take 10 (solve (THEN_SLV (RULE_SLV MOD_0) (ACCEPT_SLV (ASSUME `~(b = 0)`)))
   `??a b c. ~(b = 0) ?- a MOD b = c`);;
 
 (* ------------------------------------------------------------------------- *)
-(* Parallel combination of solvers.                                          *)
+(* Sequential chains of solvers.                                             *)
 (* ------------------------------------------------------------------------- *)
-
-let ORELSE_SLV (slv1:solver) (slv2:solver) : solver =
-  fun g -> concatf (slv1 g) (fun _ -> slv2 g);;
-
-let TRY_SLV slv =
-  ORELSE_SLV slv ALL_SLV;;
-
-let rec REPEAT_SLV slv g =
-  (ORELSE_SLV (THEN_SLV slv (REPEAT_SLV slv)) ALL_SLV) g;;
 
 let EVERY_SLV slvl =
   itlist THEN_SLV slvl ALL_SLV;;
 
-let FIRST_SLV (slvl:solver list) : solver =
-  if slvl = [] then NO_SLV else end_itlist ORELSE_SLV slvl;;
-
 let MAP_EVERY_SLV slvf lst =
   EVERY_SLV (map slvf lst);;
 
-let MAP_FIRST_SLV slvf lst =
-  FIRST_SLV (map slvf lst);;
-
-let CHANGED_SLV (slv:solver) : solver =
-  fun (_,g as mg) ->
-    bind (slv mg)
-      (function
-         meta,[gl],_ when meta = null_meta && equals_goal gl g -> empty
-       | gstate -> singleton gstate);;
-
-let APPLY_SLV : thm_solver =
-  fun th -> try let rule = RULE_SLV th in
-                ORELSE_SLV (ACCEPT_SLV th) rule
-            with Failure _ -> ACCEPT_SLV th;;
-
 (* ------------------------------------------------------------------------- *)
-(* Parallel (fair) combination of solvers.                                   *)
-(* ------------------------------------------------------------------------- *)
-
-let MPLUS_SLV (slv1:solver) (slv2:solver) : solver =
-  fun g -> mplusf (slv1 g) (fun _ -> slv2 g);;
-
-let MPLUS_LIST_SLV : solver list -> solver =
-  fun slvl g -> if slvl = [] then empty else
-                end_itlist MPLUS_SLV slvl g;;
-
-let MAP_MPLUS_LIST_SLV slvf lst =
-  MPLUS_LIST_SLV (map slvf lst);;
-
-let MPLUS_ASSUM_SLV : thm_solver -> solver =
-  fun tslv (mvs,(asl,w) as g) -> MAP_MPLUS_LIST_SLV (tslv o snd) asl g;;
-
-let MPLUS_X_ASSUM_SLV : thm_solver -> solver =
-  fun tslv -> MPLUS_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
-
-(* ------------------------------------------------------------------------- *)
-(* Tactics to augment assumption list.                                       *)
+(* Solvers to augment assumption list.                                       *)
 (* ------------------------------------------------------------------------- *)
 
 let (LABEL_SLV: string -> thm_solver) =
@@ -301,15 +261,6 @@ let POP_ASSUM_LIST_SLV : (thm list -> solver) -> solver =
 let EVERY_ASSUM_SLV : thm_solver -> solver =
   fun tslv -> ASSUM_LIST_SLV (MAP_EVERY_SLV tslv);;
 
-let FIRST_ASSUM_SLV : thm_solver -> solver =
-  fun tslv (mvs,(asl,w) as g) -> MAP_FIRST_SLV (tslv o snd) asl g;;
-
-let FIRST_X_ASSUM_SLV : thm_solver -> solver =
-  fun tslv -> FIRST_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
-
-let USE_ASSUM_SLV : thm_solver -> solver =
-  fun tslv (_,(asl,_) as g) -> MAP_FIRST_SLV (fun (_,th) -> tslv th) asl g;;
-
 let RULE_ASSUM_SLV : (thm -> thm) -> solver =
   fun rule (_,(asl,_) as g) ->
     THEN_SLV (POP_ASSUM_LIST_SLV(K ALL_SLV))
@@ -317,16 +268,69 @@ let RULE_ASSUM_SLV : (thm -> thm) -> solver =
              g;;
 
 (* ------------------------------------------------------------------------- *)
+(* Concatenation of solvers.                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let CONCAT_SLV (slv1:solver) (slv2:solver) : solver =
+  fun g -> concatf (slv1 g) (fun _ -> slv2 g);;
+
+let COLLECT_SLV (slvl:solver list) : solver =
+  if slvl = [] then NO_SLV else end_itlist CONCAT_SLV slvl;;
+
+let MAP_COLLECT_SLV (slvf:'a->solver) (lst:'a list) : solver =
+  COLLECT_SLV (map slvf lst);;
+
+let COLLECT_ASSUM_SLV (tslv:thm_solver) : solver =
+  fun (mvs,(asl,w) as g) -> MAP_COLLECT_SLV (tslv o snd) asl g;;
+
+let COLLECT_X_ASSUM_SLV (tslv:thm_solver) : solver =
+  COLLECT_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
+
+(* Serve?  Serve la versione con mplusf? *)
+let TRY_SLV slv =
+  CONCAT_SLV slv ALL_SLV;;
+
+(* Serve?  Serve la versione con mplusf? *)
+let rec REPEAT_SLV slv g =
+  (CONCAT_SLV (THEN_SLV slv (REPEAT_SLV slv)) ALL_SLV) g;;
+
+(* Serve?  Serve la versione con mplusf? *)
+let APPLY_SLV : thm_solver =
+  fun th -> try let rule = RULE_SLV th in
+                CONCAT_SLV (ACCEPT_SLV th) rule
+            with Failure _ -> ACCEPT_SLV th;;
+
+(* ------------------------------------------------------------------------- *)
+(* Interleaving of solvers.                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let MPLUS_SLV (slv1:solver) (slv2:solver) : solver =
+  fun g -> mplusf (slv1 g) (fun _ -> slv2 g);;
+
+let INTERLEAVE_SLV (slvl:solver list) : solver =
+  if slvl = [] then NO_SLV else end_itlist MPLUS_SLV slvl;;
+
+let MAP_INTERLEAVE_SLV (slvf:'a->solver) (lst:'a list) : solver =
+  INTERLEAVE_SLV (map slvf lst);;
+
+let INTERLEAVE_ASSUM_SLV (tslv:thm_solver) : solver =
+  fun (mvs,(asl,w) as g) -> MAP_INTERLEAVE_SLV (tslv o snd) asl g;;
+
+let INTERLEAVE_X_ASSUM_SLV (tslv:thm_solver) : solver =
+  INTERLEAVE_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
+
+(* ------------------------------------------------------------------------- *)
 (* A simple Prolog-like solver.                                              *)
 (* ------------------------------------------------------------------------- *)
 
 let PROLOG_SLV thl : solver =
-  let rec PROLOG_SLV g = MAP_FIRST_SLV STEP_SLV thl g
+  let rec PROLOG_SLV g = MAP_COLLECT_SLV STEP_SLV thl g
   and STEP_SLV : thm_solver =
-    fun th -> try let rule = RULE_SLV th in
-                      EVERY_SLV [rule; REPEAT_SLV CONJ_SLV; PROLOG_SLV]
-              with Failure _ -> ACCEPT_SLV th in
-  THEN_SLV (REPEAT_SLV CONJ_SLV) PROLOG_SLV;;
+    fun th ->
+      try let rule = RULE_SLV th in
+          EVERY_SLV [rule; TACTIC_SLV (REPEAT CONJ_TAC); PROLOG_SLV]
+      with Failure _ -> ACCEPT_SLV th in
+  THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) PROLOG_SLV;;
 
 (* ------------------------------------------------------------------------- *)
 (* Tests and examples.                                                       *)

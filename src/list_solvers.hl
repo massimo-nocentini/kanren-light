@@ -40,7 +40,7 @@ let [NUM_FILTER_NIL; NUM_FILTER_LE_HORN; NUM_FILTER_GT_HORN] =
   CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN);;
 
 let PROLOG_SLV thl : solver =
-  let rec PROLOG_SLV g = MAP_FIRST_SLV STEP_SLV thl g
+  let rec PROLOG_SLV g = MAP_COLLECT_SLV STEP_SLV thl g
   and STEP_SLV : thm_solver =
     fun th ->
       try let rule = RULE_SLV th in
@@ -49,7 +49,7 @@ let PROLOG_SLV thl : solver =
                        [REPEAT CONJ_TAC; BETA_TAC; NUM_REDUCE_TAC];
                      PROLOG_SLV]
       with Failure _ -> ACCEPT_SLV th in
-  THEN_SLV (REPEAT_SLV CONJ_SLV) PROLOG_SLV;;
+  THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) PROLOG_SLV;;
 
 let solve_filter =
   solve (PROLOG_SLV (CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN)));;

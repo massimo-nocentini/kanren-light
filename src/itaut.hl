@@ -67,7 +67,7 @@ let META_SPEC_SLV : thm_solver =
     let gv = genvar(type_of(fst(dest_forall(concl th)))) in
     (ASSUME_TAC th THEN META_SPEC_TAC gv th) g);;
 
-let DISJ_SLV : solver = ORELSE_SLV DISJ1_SLV DISJ2_SLV;;
+let DISJ_SLV : solver = CONCAT_SLV DISJ1_SLV DISJ2_SLV;;
 
 let X_META_EXISTS_SLV : solver =
   TACTIC_SLV (fun asl,w as g ->
@@ -81,9 +81,9 @@ let ASM_ANT_TAC : thm_tactic =
 let ASM_ANT_SLV = THM_TACTIC_SLV ASM_ANT_TAC;;
 
 let ITAUT0_SLV =
-  FIRST_SLV [UNIFY_ACCEPT_SLV TRUTH;
-             FIRST_ASSUM_SLV CONTR_SLV;
-             FIRST_ASSUM_SLV UNIFY_ACCEPT_SLV];;
+  COLLECT_SLV [UNIFY_ACCEPT_SLV TRUTH;
+               COLLECT_ASSUM_SLV CONTR_SLV;
+               COLLECT_ASSUM_SLV UNIFY_ACCEPT_SLV];;
 
 let CLARIFY_TAC : tactic =
   RIGHT_REVERSIBLE_TAC ORELSE FIRST_X_ASSUM LEFT_REVERSIBLE_TAC;;
@@ -101,11 +101,11 @@ let rec ITAUT_SLV n pg : solver =
     let () = if !debug_itaut_slv then print_goal (snd g) else () in
     let () = if !debug_itaut_slv then ignore (read_line()) else () in
     if n < 0 then (remark "Too deep!"; NO_SLV g) else
-    FIRST_SLV
+    COLLECT_SLV
       [ITAUT0_SLV;
        THEN_SLV (TACTIC_SLV PREPARE_TAC) (ITAUT_SLV n g);
        (if n >= 2
-        then THEN_SLV (FIRST_ASSUM_SLV META_SPEC_SLV) (ITAUT_SLV (n-2) g)
+        then THEN_SLV (COLLECT_ASSUM_SLV META_SPEC_SLV) (ITAUT_SLV (n-2) g)
         else (warn !debug_itaut_slv "Too deep!"; NO_SLV));
        THEN_SLV DISJ1_SLV (ITAUT_SLV n g);
        THEN_SLV DISJ2_SLV (ITAUT_SLV n g);
@@ -113,13 +113,13 @@ let rec ITAUT_SLV n pg : solver =
         then (THEN_SLV X_META_EXISTS_SLV (ITAUT_SLV (n-2) g))
         else (warn !debug_itaut_slv "Too deep!"; NO_SLV));
        (if n >= 1
-        then THEN_SLV (FIRST_X_ASSUM_SLV ASM_ANT_SLV) (ITAUT_SLV (n-1) g)
+        then THEN_SLV (COLLECT_X_ASSUM_SLV ASM_ANT_SLV) (ITAUT_SLV (n-1) g)
         else (warn !debug_itaut_slv "Too deep!"; NO_SLV))]
       g;;
 
 let rec ITAUT_ITER_SLV n : solver =
   report("Search with depth "^string_of_int n);
-  ORELSE_SLV (fun g -> ITAUT_SLV n g g) (fun g -> ITAUT_ITER_SLV (n + 1) g);;
+  CONCAT_SLV (fun g -> ITAUT_SLV n g g) (fun g -> ITAUT_ITER_SLV (n + 1) g);;
 
 let ITAUT_SLV : solver = fun g -> ITAUT_ITER_SLV 0 g;;
 
@@ -142,7 +142,6 @@ time ITAUT_TAC ([],
   (input_b ==> (output <=> F))
   ==> (output <=> ~(input_a \/ input_b))`);;
 
-counter := 40;;
 let gstate :: _ = time (take 1 o ITAUT_SLV)
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
@@ -153,7 +152,6 @@ let gstate :: _ = time (take 1 o ITAUT_SLV)
   ==> ~(input_a \/ input_b)`));;
 wrapup gstate;;
 
-counter := 100;;
 let gstate :: _ = time (take 1 o THEN_SLV (TACTIC_SLV(PURE_REWRITE_TAC[MESON[] `~p <=> (p  ==> F)`])) (fun g -> ITAUT_SLV g))
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
