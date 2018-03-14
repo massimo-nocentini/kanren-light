@@ -50,10 +50,8 @@ let ARITH_SUC_HORN = prove
   REWRITE_TAC[ARITH_SUC] THEN REPEAT STRIP_TAC THEN
   POP_ASSUM SUBST_VAR_TAC THEN REWRITE_TAC[ARITH_SUC]);;
 
-let ARITH_HORN =
-  CONJUNCTS ARITH_LE_HORN @ CONJUNCTS ARITH_LT_HORN @ CONJUNCTS ARITH_SUC_HORN;;
-
-let ARITH_SLV : solver = PROLOG_SLV ARITH_HORN;;
+let ARITH_SLV : solver =
+  PROLOG_SLV [ARITH_LE_HORN; ARITH_LT_HORN; ARITH_SUC_HORN];;
 
 (* Examples. *)
 
@@ -77,20 +75,12 @@ let NUM_LENGTH_HORN = prove
   (!h:num t n m. LENGTH t = m /\ SUC m = n ==> LENGTH (CONS h t) = n)`,
   REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
 
-let NUM_LENGTH_NIL, NUM_LENGTH_CONS_HORN = CONJ_PAIR NUM_LENGTH_HORN;;
-
 (* Examples. *)
 
-take 10 (solve (PROLOG_SLV([NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN] @
-                            CONJUNCTS ARITH_SUC_HORN))
+take 10 (solve (PROLOG_SLV [NUM_LENGTH_HORN; ARITH_SUC_HORN])
                `??n. LENGTH [1;2;3] = n`);;
 
-take 1 (solve (PROLOG_SLV([NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN] @
-                            CONJUNCTS ARITH_SUC_HORN))
-               `??xs:num list. LENGTH xs = 0`);;
-
-take 1 (solve (PROLOG_SLV([NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN] @
-                            CONJUNCTS ARITH_SUC_HORN))
+take 1  (solve (PROLOG_SLV [NUM_LENGTH_HORN; ARITH_SUC_HORN])
                `??xs:num list. LENGTH xs = 3`);;
 
 (* ------------------------------------------------------------------------- *)
@@ -113,10 +103,10 @@ take 10 (solve
             (ACCEPT_SLV NUM_APPEND_NIL))
   `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
 
-take 10 (solve (PROLOG_SLV [NUM_APPEND_NIL; NUM_APPEND_CONS])
+take 10 (solve (PROLOG_SLV [NUM_APPEND_HORN])
                `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
 
-take 10 (solve (PROLOG_SLV [NUM_APPEND_NIL; NUM_APPEND_CONS])
+take 10 (solve (PROLOG_SLV [NUM_APPEND_HORN])
                `??xs ys. APPEND xs ys = [1;2;3]`);;
 
 (* ------------------------------------------------------------------------- *)
@@ -137,12 +127,7 @@ let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
 
 (* Examples *)
 
-take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
-                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
-               `??ys:num list. REVERSE [] = ys`);;
-
-take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
-                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
+take 10 (solve (PROLOG_SLV [NUM_REVERSE_HORN; NUM_APPEND_HORN])
                `??ys. REVERSE [1;2;3] = ys`);;
 
 (* Alternative version. *)
@@ -156,7 +141,7 @@ let NUM_REVERSE_MIXED_HORN = INST_TYPE [`:num`,aty] REVERSE_MIXED_HORN;;
 (* Examples. *)
 
 take 10 (solve (PROLOG_SLV ([NUM_REVERSE_MIXED_HORN; NUM_REVERSE_NIL;
-                             NUM_APPEND_CONS; NUM_APPEND_NIL]))
+                             NUM_APPEND_HORN]))
                `??ys. REVERSE [1;2;3] = ys`);;
 
 (* ------------------------------------------------------------------------- *)
@@ -171,15 +156,10 @@ let FILTER_HORN = prove
   REWRITE_TAC[FILTER] THEN REPEAT STRIP_TAC THEN COND_CASES_TAC THEN
   ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]);;
 
-let [NUM_FILTER_NIL; NUM_FILTER_LE_HORN; NUM_FILTER_GT_HORN] =
-  CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN);;
+let NUM_FILTER_HORN = INST_TYPE [`:num`,aty] FILTER_HORN;;
 
 let solve_filter =
-  let filter_thml = CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN)
-  and le_thml = CONJUNCTS ARITH_LE_HORN
-  and lt_thml = CONJUNCTS ARITH_LT_HORN in
-  let thml = filter_thml @ le_thml @ lt_thml in
-  solve (PROLOG_SLV thml);;
+  solve (PROLOG_SLV [ARITH_LE_HORN; ARITH_LT_HORN; NUM_FILTER_HORN]);;
 
 (* Examples. *)
 
@@ -260,12 +240,8 @@ let NUM_QUICKSORT_HORN = prove
   GEN_TAC THEN REWRITE_TAC[FUN_EQ_THM; NOT_LE]);;
 
 let quicksort_solver =
-  (solve o PROLOG_SLV)
-    (CONJUNCTS NUM_QUICKSORT_HORN @
-     [NUM_APPEND_NIL; NUM_APPEND_CONS] @
-     CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN) @
-     CONJUNCTS ARITH_LE_HORN @
-     CONJUNCTS ARITH_LT_HORN);;
+  solve (PROLOG_SLV [NUM_QUICKSORT_HORN; NUM_APPEND_HORN; NUM_FILTER_HORN;
+         ARITH_LT_HORN; ARITH_LE_HORN]);;
 
 (* Examples. *)
 

@@ -324,13 +324,16 @@ let INTERLEAVE_X_ASSUM_SLV (tslv:thm_solver) : solver =
 (* ------------------------------------------------------------------------- *)
 
 let PROLOG_SLV thl : solver =
-  let rec PROLOG_SLV g = MAP_COLLECT_SLV STEP_SLV thl g
-  and STEP_SLV : thm_solver =
-    fun th ->
-      try let rule = RULE_SLV th in
-          EVERY_SLV [rule; TACTIC_SLV (REPEAT CONJ_TAC); PROLOG_SLV]
-      with Failure _ -> ACCEPT_SLV th in
-  THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) PROLOG_SLV;;
+  let RAW_PROLOG_SLV thl : solver =
+    let rec PROLOG_SLV g = MAP_COLLECT_SLV STEP_SLV thl g
+    and STEP_SLV : thm_solver =
+      fun th ->
+        try let rule = RULE_SLV th in
+            EVERY_SLV [rule; TACTIC_SLV (REPEAT CONJ_TAC); PROLOG_SLV]
+        with Failure _ -> ACCEPT_SLV th in
+    THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) PROLOG_SLV in
+  let thl' = itlist (fun th acc -> striplist CONJ_PAIR th @ acc) thl [] in
+  RAW_PROLOG_SLV thl';;
 
 (* ------------------------------------------------------------------------- *)
 (* Tests and examples.                                                       *)
