@@ -128,8 +128,9 @@ let gstate::_ = take 1 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([`a:bool`],([],`a:bool`)));;
 let [] = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
-let gstate::ppp = take 10 (ITAUT_SLV ([`a:bool`],([],`~ ~a ==> a`)));;
-wrapup gstate;;
+take 100 (ITAUT_SLV ([`a:bool`],([],`~ ~a ==> a`)));;
+(* Perche' da' come unica suluzione a = T *)
+map wrapup it;;
 
 map wrapup (take 20 (ITAUT_SLV ([`a:bool`],([],`a /\ b ==> b /\ a`))));;
 

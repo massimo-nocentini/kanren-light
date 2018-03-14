@@ -11,15 +11,102 @@ type_invention_warning := true;;
 prioritize_num();;
 
 (* ------------------------------------------------------------------------- *)
+(* Horn clauses for basic arithmetic operations.                             *)
+(* ------------------------------------------------------------------------- *)
+
+let ARITH_LE_HORN = prove
+ (`(!m n. m <= n ==> NUMERAL m <= NUMERAL n) /\
+   _0 <= _0 /\
+   (!n. n <= _0 ==> BIT0 n <= _0) /\
+   (!n. _0 <= BIT0 n) /\
+   (!n. _0 <= BIT1 n) /\
+   (!m n. m <= n ==> BIT0 m <= BIT0 n) /\
+   (!m n. m <= n ==> BIT0 m <= BIT1 n) /\
+   (!m n. m < n ==> BIT1 m <= BIT0 n) /\
+   (!m n. m <= n ==> BIT1 m <= BIT1 n) /\
+   (!m n. n < m ==> ~(m <= n)) /\
+   (!m n. n <= m ==> m >= n) /\
+   (!m n. m < n ==> ~(m >= n))`,
+  REWRITE_TAC[GE; NOT_LE; ARITH_LE]);;
+
+let ARITH_LT_HORN = prove
+ (`(!m n. m < n ==> NUMERAL m < NUMERAL n) /\
+   (!n. _0 < n ==> _0 < BIT0 n) /\
+   (!n. _0 < BIT1 n) /\
+   (!m n. m < n ==> BIT0 m < BIT0 n) /\
+   (!m n. m <= n ==> BIT0 m < BIT1 n) /\
+   (!m n. m < n ==> BIT1 m < BIT0 n) /\
+   (!m n. m < n ==> BIT1 m < BIT1 n) /\
+   (!m n. n <= m ==> ~(m < n)) /\
+   (!m n. n < m ==> m > n) /\
+   (!m n. m <= n ==> ~(m > n))`,
+  REWRITE_TAC[GT; NOT_LT; ARITH_LT]);;
+
+let ARITH_SUC_HORN = prove
+ (`(!n m. SUC n = m ==> SUC (NUMERAL n) = NUMERAL m) /\
+   SUC _0 = BIT1 _0 /\
+   (!n. SUC (BIT0 n) = BIT1 n) /\
+   (!n m. SUC n = m ==> SUC (BIT1 n) = BIT0 m)`,
+  REWRITE_TAC[ARITH_SUC] THEN REPEAT STRIP_TAC THEN
+  POP_ASSUM SUBST_VAR_TAC THEN REWRITE_TAC[ARITH_SUC]);;
+
+let ARITH_HORN =
+  CONJUNCTS ARITH_LE_HORN @ CONJUNCTS ARITH_LT_HORN @ CONJUNCTS ARITH_SUC_HORN;;
+
+let ARITH_SLV : solver = PROLOG_SLV ARITH_HORN;;
+
+(* Examples. *)
+
+take 10 (solve ARITH_SLV `2 <= 3`);;
+take 10 (solve ARITH_SLV `~(3 <= 2)`);;
+take 10 (solve ARITH_SLV `2 < 3`);;
+take 10 (solve ARITH_SLV `~(3 < 2)`);;
+take 10 (solve ARITH_SLV `3 > 2`);;
+take 10 (solve ARITH_SLV `3 >= 2`);;
+take 10 (solve ARITH_SLV `~(2 > 3)`);;
+take 10 (solve ARITH_SLV `~(2 >= 3)`);;
+take 10 (solve ARITH_SLV `SUC 3 = 4`);;
+take 10 (solve ARITH_SLV `??m. SUC 3 = m`);;
+
+(* ------------------------------------------------------------------------- *)
+(* Length.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let NUM_LENGTH_HORN = prove
+ (`LENGTH ([]:num list) = 0 /\
+  (!h:num t n m. LENGTH t = m /\ SUC m = n ==> LENGTH (CONS h t) = n)`,
+  REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
+
+let NUM_LENGTH_NIL, NUM_LENGTH_CONS_HORN = CONJ_PAIR NUM_LENGTH_HORN;;
+
+(* Examples. *)
+
+take 10 (solve (PROLOG_SLV([NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN] @
+                            CONJUNCTS ARITH_SUC_HORN))
+               `??n. LENGTH [1;2;3] = n`);;
+
+take 1 (solve (PROLOG_SLV([NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN] @
+                            CONJUNCTS ARITH_SUC_HORN))
+               `??xs:num list. LENGTH xs = 0`);;
+
+take 1 (solve (PROLOG_SLV([NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN] @
+                            CONJUNCTS ARITH_SUC_HORN))
+               `??xs:num list. LENGTH xs = 3`);;
+
+(* ------------------------------------------------------------------------- *)
 (* Append.                                                                   *)
 (* ------------------------------------------------------------------------- *)
 
-let APPEND_CONS = prove
- (`!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs`,
+let APPEND_HORN = prove
+ (`(!l:A list. APPEND [] l = l) /\
+   (!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs)`,
   REWRITE_TAC[APPEND; CONS_11]);;
 
-let NUM_APPEND_CONS = INST_TYPE [`:num`,aty] APPEND_CONS;;
-let NUM_APPEND_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 APPEND);;
+let NUM_APPEND_HORN = INST_TYPE [`:num`,aty] APPEND_HORN;;
+
+let NUM_APPEND_NIL, NUM_APPEND_CONS = CONJ_PAIR NUM_APPEND_HORN;;
+
+(* Examples. *)
 
 take 10 (solve
   (THEN_SLV (REPEAT_SLV (RULE_SLV NUM_APPEND_CONS))
@@ -28,6 +115,49 @@ take 10 (solve
 
 take 10 (solve (PROLOG_SLV [NUM_APPEND_NIL; NUM_APPEND_CONS])
                `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
+
+take 10 (solve (PROLOG_SLV [NUM_APPEND_NIL; NUM_APPEND_CONS])
+               `??xs ys. APPEND xs ys = [1;2;3]`);;
+
+(* ------------------------------------------------------------------------- *)
+(* Reverse.                                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let REVERSE_HORN = prove
+ (`(REVERSE [] = []:A list) /\
+   (!x:A xs ys zs. REVERSE xs = ys /\ APPEND ys [x] = zs
+                   ==> REVERSE (CONS x xs) = zs)`,
+  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
+
+let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
+
+let NUM_REVERSE_NIL, NUM_REVERSE_CONS = CONJ_PAIR NUM_REVERSE_HORN;;
+
+let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
+
+(* Examples *)
+
+take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
+                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
+               `??ys:num list. REVERSE [] = ys`);;
+
+take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
+                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
+               `??ys. REVERSE [1;2;3] = ys`);;
+
+(* Alternative version. *)
+
+let REVERSE_MIXED_HORN = prove
+ (`!x:A xs ys. REVERSE xs = ys ==> REVERSE (CONS x xs) = APPEND ys [x]`,
+  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
+
+let NUM_REVERSE_MIXED_HORN = INST_TYPE [`:num`,aty] REVERSE_MIXED_HORN;;
+
+(* Examples. *)
+
+take 10 (solve (PROLOG_SLV ([NUM_REVERSE_MIXED_HORN; NUM_REVERSE_NIL;
+                             NUM_APPEND_CONS; NUM_APPEND_NIL]))
+               `??ys. REVERSE [1;2;3] = ys`);;
 
 (* ------------------------------------------------------------------------- *)
 (* Filter.                                                                   *)
@@ -44,63 +174,14 @@ let FILTER_HORN = prove
 let [NUM_FILTER_NIL; NUM_FILTER_LE_HORN; NUM_FILTER_GT_HORN] =
   CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN);;
 
-(*
-let PROLOG_SLV thl : solver =
-  let rec PROLOG_SLV g = MAP_COLLECT_SLV STEP_SLV thl g
-  and STEP_SLV : thm_solver =
-    fun th ->
-      try let rule = RULE_SLV th in
-          EVERY_SLV [rule;
-                     (TACTIC_SLV o EVERY)
-                       [REPEAT CONJ_TAC; BETA_TAC; NUM_REDUCE_TAC];
-                     PROLOG_SLV]
-      with Failure _ -> ACCEPT_SLV th in
-  THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) PROLOG_SLV;;
-*)
-
-let HORN_ARITH_LE = prove
- (`(!m n. m <= n ==> NUMERAL m <= NUMERAL n) /\
-   _0 <= _0 /\
-   (!n. n <= _0 ==> BIT0 n <= _0) /\
-   (!n. _0 <= BIT0 n) /\
-   (!n. _0 <= BIT1 n) /\
-   (!m n. m <= n ==> BIT0 m <= BIT0 n) /\
-   (!m n. m <= n ==> BIT0 m <= BIT1 n) /\
-   (!m n. m < n ==> BIT1 m <= BIT0 n) /\
-   (!m n. m <= n ==> BIT1 m <= BIT1 n) /\
-   (!m n. n < m ==> ~(m <= n)) /\
-   (!m n. n <= m ==> m >= n) /\
-   (!m n. m < n ==> ~(m >= n))`,
-  REWRITE_TAC[GE; NOT_LE; ARITH_LE]);;
-
-let HORN_ARITH_LT = prove
- (`(!m n. m < n ==> NUMERAL m < NUMERAL n) /\
-   (!n. _0 < n ==> _0 < BIT0 n) /\
-   (!n. _0 < BIT1 n) /\
-   (!m n. m < n ==> BIT0 m < BIT0 n) /\
-   (!m n. m <= n ==> BIT0 m < BIT1 n) /\
-   (!m n. m < n ==> BIT1 m < BIT0 n) /\
-   (!m n. m < n ==> BIT1 m < BIT1 n) /\
-   (!m n. n <= m ==> ~(m < n)) /\
-   (!m n. n < m ==> m > n) /\
-   (!m n. m <= n ==> ~(m > n))`,
-  REWRITE_TAC[GT; NOT_LT; ARITH_LT]);;
-
 let solve_filter =
   let filter_thml = CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN)
-  and le_thml = CONJUNCTS HORN_ARITH_LE
-  and lt_thml = CONJUNCTS HORN_ARITH_LT in
+  and le_thml = CONJUNCTS ARITH_LE_HORN
+  and lt_thml = CONJUNCTS ARITH_LT_HORN in
   let thml = filter_thml @ le_thml @ lt_thml in
   solve (PROLOG_SLV thml);;
 
-take 10 (solve_filter `2 <= 3`);;
-take 10 (solve_filter `~(3 <= 2)`);;
-take 10 (solve_filter `2 < 3`);;
-take 10 (solve_filter `~(3 < 2)`);;
-take 10 (solve_filter `3 > 2`);;
-take 10 (solve_filter `3 >= 2`);;
-take 10 (solve_filter `~(2 > 3)`);;
-take 10 (solve_filter `~(2 >= 3)`);;
+(* Examples. *)
 
 take 10 (solve_filter `??ys. FILTER ((>=) 3) [] = ys`);;
 take 10 (solve_filter `??ys. FILTER ((>=) 3) [1] = ys`);;
@@ -118,7 +199,7 @@ let SORT_NIL = prove
  (`!le. SORT (le:A->A->bool) [] []`,
   REWRITE_TAC[SORT; PERMUTED_RULES; ORDERED_RULES]);;
 
-let QUICKSORT = prove
+let QUICKSORT_HORN = prove
  (`!le:A->A->bool.
      (!x y. le x y \/ le y x) /\
      (!x y z. le x y /\ le y z ==> le x z)
@@ -160,7 +241,7 @@ let QUICKSORT = prove
       (ONCE_REWRITE_RULE[PERMUTED_SYM] th)]) THEN
   REWRITE_TAC[ALL_FILTER; GSYM ALL_MEM] THEN ASM_MESON_TAC[]);;
 
-let NUM_QUICKSORT = prove
+let NUM_QUICKSORT_HORN = prove
  (`SORT ((<=):num->num->bool) [] [] /\
    (!x xs ys xs1 xs2 ys1 ys2.
       FILTER ((>=) x) xs = xs1 /\
@@ -169,7 +250,7 @@ let NUM_QUICKSORT = prove
       SORT (<=) xs2 ys2 /\
       APPEND ys1 (CONS x ys2) = ys
       ==> SORT ((<=):num->num->bool) (CONS x xs) ys)`,
-  MP_TAC (ISPEC `((<=):num->num->bool)` QUICKSORT) THEN
+  MP_TAC (ISPEC `((<=):num->num->bool)` QUICKSORT_HORN) THEN
   ANTS_TAC THENL [ARITH_TAC; ALL_TAC] THEN
   SUBGOAL_THEN `!x:num. (\y. y <= x) = ((>=) x)`
     (fun th -> REWRITE_TAC[th]) THENL
@@ -178,15 +259,15 @@ let NUM_QUICKSORT = prove
     (fun th -> REWRITE_TAC[th]) THEN
   GEN_TAC THEN REWRITE_TAC[FUN_EQ_THM; NOT_LE]);;
 
-let LIST_NUM_REFL = MESON [] `!l:num list. l = l`;;
-
 let quicksort_solver =
   (solve o PROLOG_SLV)
-    (CONJUNCTS NUM_QUICKSORT @
+    (CONJUNCTS NUM_QUICKSORT_HORN @
      [NUM_APPEND_NIL; NUM_APPEND_CONS] @
      CONJUNCTS (INST_TYPE [`:num`,aty] FILTER_HORN) @
-     CONJUNCTS HORN_ARITH_LE @
-     CONJUNCTS HORN_ARITH_LT);;
+     CONJUNCTS ARITH_LE_HORN @
+     CONJUNCTS ARITH_LT_HORN);;
+
+(* Examples. *)
 
 take 10 (quicksort_solver `??ys. SORT (<=) [] ys`);;
 take 10 (quicksort_solver `??ys. SORT (<=) [3] ys`);;
@@ -196,82 +277,6 @@ take 10 (quicksort_solver `??ys. SORT (<=) [3;3] ys`);;
 take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] ys`);;
 
 take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] (CONS 3 ys)`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] (CONS 12 ys)`);;
 take 10 (quicksort_solver `??y ys. SORT (<=) [12;3;3;23;7;9;12] (CONS y ys)`);;
 take 10 (quicksort_solver `??ys zs. SORT (<=) [7;3;0] (APPEND ys zs)`);;
-
-take 10 (quicksort_solver `??xs ys. APPEND xs ys = [1;2;3]`);;
-
-(* ========================================================================= *)
-(* Hic sunt leones.                                                          *)
-(* ========================================================================= *)
-
-(* ------------------------------------------------------------------------- *)
-(* Reverse.                                                                  *)
-(* ------------------------------------------------------------------------- *)
-
-let NUM_REVERSE_NIL = INST_TYPE [`:num`,aty] (CONJUNCT1 REVERSE);;
-
-let REVERSE_HORN = prove
- (`!x:A xs ys zs. REVERSE xs = ys /\ APPEND ys [x] = zs
-                  ==> REVERSE (CONS x xs) = zs`,
-  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
-
-let REVERSE_MIXED_HORN = prove
- (`!x:A xs ys. REVERSE xs = ys ==> REVERSE (CONS x xs) = APPEND ys [x]`,
-  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
-
-let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
-let NUM_REVERSE_MIXED_HORN = INST_TYPE [`:num`,aty] REVERSE_MIXED_HORN;;
-
-take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
-                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
-               `??ys:num list. REVERSE [] = ys`);;
-
-take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
-                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
-               `??ys. REVERSE [1;2;3] = ys`);;
-
-take 10 (solve (PROLOG_SLV (CONJUNCTS NUM_REVERSE_HORN @
-                            CONJUNCTS NUM_REVERSE_MIXED_HORN @
-                            [NUM_REVERSE_NIL; NUM_APPEND_CONS; NUM_APPEND_NIL]))
-               `??ys. REVERSE [1;2;3] = ys`);;
-
-(* ------------------------------------------------------------------------- *)
-(* Length.                                                                   *)
-(* ------------------------------------------------------------------------- *)
-
-let NUM_LENGTH_HORN = prove
- (`LENGTH ([]:num list) = 0 /\
-  (!h:num t n m. LENGTH t = m /\ n = SUC m ==> LENGTH (CONS h t) = n)`,
-  REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
-
-let NUM_LENGTH_NIL, NUM_LENGTH_CONS_HORN = CONJ_PAIR NUM_LENGTH_HORN;;
-
-take 10 (solve (PROLOG_SLV[NUM_LENGTH_NIL; NUM_LENGTH_CONS_HORN; ARITH_RULE `!n. n:num = n`])
-               `??n. LENGTH [1;2;3] = n`);;
-
-THENL_SLV (THEN_SLV (RULE_SLV NUM_LENGTH_CONS_HORN)
-                    (TACTIC_SLV (REPEAT CONJ_TAC)))
-  [THENL_SLV (THEN_SLV (RULE_SLV NUM_LENGTH_CONS_HORN)
-                       (TACTIC_SLV (REPEAT CONJ_TAC)))
-    [THENL_SLV (THEN_SLV (RULE_SLV NUM_LENGTH_CONS_HORN)
-                         (TACTIC_SLV (REPEAT CONJ_TAC)))
-       [ACCEPT_SLV NUM_LENGTH_NIL; ACCEPT_SLV (ARITH_RULE `!n. n:num = n`)];
-     ACCEPT_SLV (ARITH_RULE `!n. n:num = n`)];
-   ACCEPT_SLV (ARITH_RULE `!n. n:num = n`)]
-  ([`n:num`],([],`LENGTH[1;2;3] = n`));;
-
-(take 10 o solve
-(THENL_SLV (THEN_SLV (RULE_SLV NUM_LENGTH_CONS_HORN)
-                    (TACTIC_SLV (REPEAT CONJ_TAC)))
-  [THENL_SLV (THEN_SLV (RULE_SLV NUM_LENGTH_CONS_HORN)
-                       (TACTIC_SLV (REPEAT CONJ_TAC)))
-    [THENL_SLV (THEN_SLV (RULE_SLV NUM_LENGTH_CONS_HORN)
-                         (TACTIC_SLV (REPEAT CONJ_TAC)))
-       [ACCEPT_SLV NUM_LENGTH_NIL; ACCEPT_SLV (ARITH_RULE `!n. n:num = n`)];
-     ACCEPT_SLV (ARITH_RULE `!n. n:num = n`)];
-   ACCEPT_SLV (ARITH_RULE `!n. n:num = n`)]);;
-
-kprove(`??n. LENGTH [1;2;3] = n`, LENGTH_SLV);;
-kprove(`??x:num xs. LENGTH (CONS x xs) = 1`, LENGTH_SLV);;
-kprove(`??xs:num list. LENGTH xs = 1`, LENGTH_SLV);;
