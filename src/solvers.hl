@@ -75,6 +75,7 @@ let SOLVER (f:term list -> goal -> goalstate) : solver =
 let NO_SLV : solver =
   fun _ -> empty;;
 
+(* Implementation using term_unify (no type instantiation) *)
 let REFL_SLV =
   SOLVER (fun mvs (asl,w) ->
     let l,r = dest_eq w in
@@ -93,6 +94,8 @@ let SPEC_FRESH th =
 
 let SPEC_FRESH_ALL = splitlist SPEC_FRESH;;
 
+(* Implementation that uses term_unify
+   (no type instantiation, pure first-order. *)
 let ACCEPT_SLV : thm_solver =
   fun th -> SOLVER (fun mvs (asl,w) ->
     let avs,th' = SPEC_FRESH_ALL th in
