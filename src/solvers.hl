@@ -51,14 +51,10 @@ let wrapup : goalstate -> (term list * instantiation) * thm  =
     let th = just null_inst [] in
     metas,th;;
 
-let solve : solver -> term -> (term list * thm) stream =
-  let run_solver g slv = stream_mapfilter wrapup (slv g)
-  and mk_veq inst v = mk_eq(v,instantiate inst v) in
+let solve : solver -> term -> (instantiation * thm) stream =
+  let run_solver g slv = stream_mapfilter wrapup (slv g) in
   fun slv tm ->
-    let mvs,g as mg = dest_mgoal tm in
-    let mk_veqs inst = map (mk_veq inst) mvs in
-    let p ((mvs',inst),th) =
-      mk_veqs inst,th in
+    let p ((mvs',inst),th) = inst,th in
     stream_map p (run_solver (dest_mgoal tm) slv);;
 
 (* ------------------------------------------------------------------------- *)
@@ -76,6 +72,7 @@ let NO_SLV : solver =
   fun _ -> empty;;
 
 (* Implementation using term_unify (no type instantiation) *)
+(*
 let REFL_SLV =
   SOLVER (fun mvs (asl,w) ->
     let l,r = dest_eq w in
@@ -83,9 +80,20 @@ let REFL_SLV =
     let sth = ALPHA (instantiate inst l) (instantiate inst r) in
     let just i _ = INSTANTIATE_ALL i sth in
     ([],inst),[],just);;
+*)
+
+(* New version with type instantition. *)
+let REFL_SLV =
+  SOLVER (fun mvs (asl,w) ->
+    let l,r = dest_eq w in
+    let inst = term_ty_unify mvs l r in
+    let sth = ALPHA (instantiate inst l) (instantiate inst r) in
+    let just i _ = INSTANTIATE_ALL i sth in
+    ([],inst),[],just);;
 
 take 10 (solve REFL_SLV `??m n. m + n = 1 + 2`);;
 take 10 (solve REFL_SLV `??m n. m + n = a + b`);;
+take 10 (solve REFL_SLV `??m n. FST (1,(m:A)) = FST (1,(n:B))`);;
 
 let SPEC_FRESH th =
   let v,th' = SPEC_VAR th in
@@ -96,6 +104,7 @@ let SPEC_FRESH_ALL = splitlist SPEC_FRESH;;
 
 (* Implementation that uses term_unify
    (no type instantiation, pure first-order. *)
+(*
 let ACCEPT_SLV : thm_solver =
   fun th -> SOLVER (fun mvs (asl,w) ->
     let avs,th' = SPEC_FRESH_ALL th in
@@ -103,7 +112,22 @@ let ACCEPT_SLV : thm_solver =
     let sth = INSTANTIATE inst th' in
     let just i _ = INSTANTIATE_ALL i sth in
     (avs,inst),[],just);;
+*)
 
+(* New version with type instantition. *)
+let ACCEPT_SLV : thm_solver =
+  fun th -> SOLVER (fun mvs (asl,w) ->
+    let avs,th' = SPEC_FRESH_ALL th in
+    let inst = term_ty_unify (union avs mvs) (concl th') w in
+    let sth = INSTANTIATE inst th' in
+    let just i _ = INSTANTIATE_ALL i sth in
+    (avs,inst),[],just);;
+
+get (solve (ACCEPT_SLV (MESON [] `!a. 1,a:A = 1,a`)) `??x b. 1,x = b,b`);;
+
+(* Implementation that uses term_unify
+   (no type instantiation, pure first-order. *)
+(*
 let RULE_SLV : thm_solver = fun th ->
  if not(is_imp(snd(strip_forall(concl th)))) then
    failwith "RULE_SLV: Bad theorem"
@@ -113,6 +137,27 @@ let RULE_SLV : thm_solver = fun th ->
      let ant,con = dest_imp(concl th) in
      let evs = filter (fun v -> vfree_in v ant && not (vfree_in v con)) avs in
      let inst = term_unify (union avs mvs) con w in
+     let sth = INSTANTIATE inst th in
+     let lant = fst(dest_imp(concl sth)) in
+     let just i (th :: _) =
+       try MP (INSTANTIATE_ALL i sth) th
+       with Failure _ ->
+         (report(string_of_thm (CONJ (INSTANTIATE_ALL i sth) th));
+          fail())
+       in
+     (avs,inst),[asl,lant],just);;
+*)
+
+(* New version with type instantition. *)
+let RULE_SLV : thm_solver = fun th ->
+ if not(is_imp(snd(strip_forall(concl th)))) then
+   failwith "RULE_SLV: Bad theorem"
+ else
+   SOLVER (fun mvs (asl,w) ->
+     let avs,th = SPEC_FRESH_ALL th in
+     let ant,con = dest_imp(concl th) in
+     let evs = filter (fun v -> vfree_in v ant && not (vfree_in v con)) avs in
+     let inst = term_ty_unify (union avs mvs) con w in
      let sth = INSTANTIATE inst th in
      let lant = fst(dest_imp(concl sth)) in
      let just i (th :: _) =

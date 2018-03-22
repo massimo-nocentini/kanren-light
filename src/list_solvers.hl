@@ -83,6 +83,19 @@ take 10 (solve (PROLOG_SLV [NUM_LENGTH_HORN; ARITH_SUC_HORN])
 take 1  (solve (PROLOG_SLV [NUM_LENGTH_HORN; ARITH_SUC_HORN])
                `??xs:num list. LENGTH xs = 3`);;
 
+(* With type instantiation. *)
+
+let LENGTH_HORN = prove
+ (`LENGTH ([]:A list) = 0 /\
+  (!h:A t n m. LENGTH t = m /\ SUC m = n ==> LENGTH (CONS h t) = n)`,
+  REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
+
+take 10 (solve (PROLOG_SLV [LENGTH_HORN; ARITH_SUC_HORN])
+               `??n. LENGTH [1;2;3] = n`);;
+
+take 1  (solve (PROLOG_SLV [LENGTH_HORN; ARITH_SUC_HORN])
+               `??xs:num list. LENGTH xs = 3`);;
+
 (* ------------------------------------------------------------------------- *)
 (* Append.                                                                   *)
 (* ------------------------------------------------------------------------- *)
@@ -91,6 +104,8 @@ let APPEND_HORN = prove
  (`(!l:A list. APPEND [] l = l) /\
    (!x:A xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs)`,
   REWRITE_TAC[APPEND; CONS_11]);;
+
+let APPEND_NIL, APPEND_CONS = CONJ_PAIR APPEND_HORN;;
 
 let NUM_APPEND_HORN = INST_TYPE [`:num`,aty] APPEND_HORN;;
 
@@ -109,6 +124,18 @@ take 10 (solve (PROLOG_SLV [NUM_APPEND_HORN])
 take 10 (solve (PROLOG_SLV [NUM_APPEND_HORN])
                `??xs ys. APPEND xs ys = [1;2;3]`);;
 
+(* With type instantiation. *)
+
+take 10 (solve
+  (THEN_SLV (REPEAT_SLV (RULE_SLV APPEND_CONS)) (ACCEPT_SLV APPEND_NIL))
+  `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
+
+take 10 (solve (PROLOG_SLV [APPEND_HORN])
+               `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
+
+take 10 (solve (PROLOG_SLV [APPEND_HORN])
+               `??xs ys. APPEND xs ys = [1;2;3]`);;
+
 (* ------------------------------------------------------------------------- *)
 (* Reverse.                                                                  *)
 (* ------------------------------------------------------------------------- *)
@@ -122,8 +149,6 @@ let REVERSE_HORN = prove
 let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
 
 let NUM_REVERSE_NIL, NUM_REVERSE_CONS = CONJ_PAIR NUM_REVERSE_HORN;;
-
-let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
 
 (* Examples *)
 
@@ -144,6 +169,16 @@ take 10 (solve (PROLOG_SLV ([NUM_REVERSE_MIXED_HORN; NUM_REVERSE_NIL;
                              NUM_APPEND_HORN]))
                `??ys. REVERSE [1;2;3] = ys`);;
 
+(* With type instantiation. *)
+
+let REVERSE_NIL, REVERSE_CONS = CONJ_PAIR REVERSE_HORN;;
+
+take 10 (solve (PROLOG_SLV [REVERSE_HORN; APPEND_HORN])
+               `??ys. REVERSE [1;2;3] = ys`);;
+
+take 10 (solve (PROLOG_SLV ([REVERSE_MIXED_HORN; REVERSE_NIL; APPEND_HORN]))
+               `??ys. REVERSE [1;2;3] = ys`);;
+
 (* ------------------------------------------------------------------------- *)
 (* Filter.                                                                   *)
 (* ------------------------------------------------------------------------- *)
@@ -162,6 +197,16 @@ let solve_filter =
   solve (PROLOG_SLV [ARITH_LE_HORN; ARITH_LT_HORN; NUM_FILTER_HORN]);;
 
 (* Examples. *)
+
+take 10 (solve_filter `??ys. FILTER ((>=) 3) [] = ys`);;
+take 10 (solve_filter `??ys. FILTER ((>=) 3) [1] = ys`);;
+take 10 (solve_filter `??ys. FILTER ((>=) 3) [5] = ys`);;
+take 10 (solve_filter `??ys. FILTER ((>=) 3) [1;5;2] = ys`);;
+
+(* With type instantiation. *)
+
+let solve_filter =
+  solve (PROLOG_SLV [ARITH_LE_HORN; ARITH_LT_HORN; FILTER_HORN]);;
 
 take 10 (solve_filter `??ys. FILTER ((>=) 3) [] = ys`);;
 take 10 (solve_filter `??ys. FILTER ((>=) 3) [1] = ys`);;
@@ -244,6 +289,24 @@ let quicksort_solver =
          ARITH_LT_HORN; ARITH_LE_HORN]);;
 
 (* Examples. *)
+
+take 10 (quicksort_solver `??ys. SORT (<=) [] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [3] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [3;1] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [1;3] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [3;3] ys`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] ys`);;
+
+take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] (CONS 3 ys)`);;
+take 10 (quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] (CONS 12 ys)`);;
+take 10 (quicksort_solver `??y ys. SORT (<=) [12;3;3;23;7;9;12] (CONS y ys)`);;
+take 10 (quicksort_solver `??ys zs. SORT (<=) [7;3;0] (APPEND ys zs)`);;
+
+(* With type instantiation. *)
+
+let quicksort_solver =
+  solve (PROLOG_SLV [NUM_QUICKSORT_HORN; APPEND_HORN; FILTER_HORN;
+         ARITH_LT_HORN; ARITH_LE_HORN]);;
 
 take 10 (quicksort_solver `??ys. SORT (<=) [] ys`);;
 take 10 (quicksort_solver `??ys. SORT (<=) [3] ys`);;
