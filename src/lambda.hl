@@ -1,0 +1,103 @@
+let LAMBDA_INDUCT,LAMBDA_RECUR = define_type
+  "lambda = Ref num
+          | App lambda lambda
+          | Abs lambda
+          | Quote";;
+
+let NTH = new_definition
+  `NTH i l x <=> i < LENGTH l /\ EL i l = x`;; 
+
+(*
+let BUMP = new_recursive_definition LAMBDA_RECUR
+  `(!k i. BUMP k (Ref i) = if i < k then Ref i else Ref (SUC i)) /\
+   (!k x y. BUMP k (App x y) =
+            if x = Quote then (App x y) else
+            App (BUMP k x) (BUMP k y)) /\
+   (!k x. BUMP k (Abs x) = Abs (BUMP (SUC k) x)) /\
+   (!k. BUMP k Quote = Quote`;;
+*)
+
+let SHIFTENV = new_recursive_definition num_RECURSION
+  `(!f. SHIFTENV f 0 = 0) /\
+   (!f i. SHIFTENV f (SUC i) = SUC (f i))`;;
+
+let REINDEX = new_recursive_definition LAMBDA_RECUR
+  `(!f i. REINDEX f (Ref i) = Ref (f i)) /\
+   (!f x y. REINDEX f (App x y) =
+            if x = Quote then App x y else
+            App (REINDEX f x) (REINDEX f y)) /\
+   (!f x. REINDEX f (Abs x) = Abs (REINDEX (SHIFTENV f) x)) /\
+   (!f. REINDEX f Quote = Quote)`;;
+
+(* `BUMP x = REINDEX SUC x` *)
+
+let SHIFT = new_recursive_definition num_RECURSION
+  `(!f. SHIFT f 0 = Ref 0) /\
+   (!f i. SHIFT f (SUC i) = REINDEX SUC (f i))`;;
+
+let LAMBDASUBST = new_recursive_definition LAMBDA_RECUR
+  `(!f i. LAMBDASUBST f (Ref i) = f i) /\
+   (!f x y. LAMBDASUBST f (App x y) =
+            if x = Quote then App x y else
+            App (LAMBDASUBST f x) (LAMBDASUBST f y)) /\
+   (!f x. LAMBDASUBST f (Abs x) = Abs (LAMBDASUBST (SHIFT f) x)) /\
+   (!f. LAMBDASUBST f Quote = Quote)`;;
+
+let GETENV_RULES,GETENV_INDUCT,GETENV_CASES = new_inductive_definition
+  `(!env x. GETENV 0 (CONS x env) x) /\
+   (!env x i y. GETENV i env y
+                ==> GETENV (SUC i) (CONS x env) (REINDEX SUC y))`;;
+
+let GETENV_HEAD,GETENV_TAIL = CONJ_PAIR GETENV_RULES;;
+
+let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
+  `(!env i x. GETENV i env x ==> EVAL env (Ref i) x) /\
+   (!env x x' y y' z.
+      EVAL env x' (Abs x) /\ EVAL env y y' /\ EVAL (CONS y' env) x z
+      ==> EVAL env (App x' y) z) /\
+   (!env x. EVAL env (Abs x) (Abs x)) /\
+   (!env x y. EVAL env x Quote ==> EVAL env (App x y) y) /\
+   (!env. EVAL env Quote Quote)`;;
+
+let [EVAL_REF; EVAL_BETA; EVAL_ABS; EVAL_WALK; EVAL_QUOTE] = CONJUNCTS EVAL_RULES;;
+
+(*
+(define quinec ’((lambda (x)
+(app x (app (app quote quote) x)))
+ (app quote
+ (lambda (x)
+(app x (app (app quote quote) x))))))
+*)
+
+g `let w = Abs (App (Ref 0) (App (App Quote Quote) (Ref 0))) in
+   let q = (App w (App Quote w)) in
+   EVAL [] q q`;;
+
+LET_TAC THEN POP_ASSUM SUBST_VAR_TAC THEN
+LET_TAC THEN POP_ASSUM SUBST_VAR_TAC THEN
+MATCH_MP_TAC EVAL_BETA THEN
+EXISTS_TAC `App (Ref 0) (App (App Quote Quote) (Ref 0))` THEN
+EXISTS_TAC `Abs (App (Ref 0) (App (App Quote Quote) (Ref 0)))` THEN
+CONJ_TAC THENL [MATCH_ACCEPT_TAC EVAL_ABS; ALL_TAC] THEN
+CONJ_TAC THENL [MATCH_MP_TAC EVAL_WALK THEN MATCH_ACCEPT_TAC EVAL_QUOTE; ALL_TAC] THEN
+MATCH_MP_TAC EVAL_BETA THEN
+EXISTS_TAC `App (Ref 0) (App (App Quote Quote) (Ref 0))` THEN
+EXISTS_TAC `Ref 0` THEN
+CONJ_TAC THENL
+[MATCH_MP_TAC EVAL_REF THEN
+ MATCH_ACCEPT_TAC GETENV_HEAD;
+ ALL_TAC] THEN
+CONJ_TAC THENL
+[MATCH_MP_TAC EVAL_WALK THEN MATCH_MP_TAC EVAL_WALK THEN
+ MATCH_ACCEPT_TAC EVAL_QUOTE;
+ ALL_TAC] THEN
+
+MATCH_MP_TAC EVAL_BETA THEN
+EXISTS_TAC `App (Ref 0) (App (App Quote Quote) (Ref 0))` THEN
+
+EXISTS_TAC `Ref 0` THEN
+
+EXISTS_TAC `Abs (App (Ref 0) (App (App Quote Quote) (Ref 0)))` THEN
+CONJ_TAC THENL
+ MATCH_MP_TAC EVAL_REF THEN
+ MATCH_ACCEPT_TAC GETENV_HEAD THEN
