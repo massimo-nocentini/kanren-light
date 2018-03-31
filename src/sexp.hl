@@ -1,0 +1,319 @@
+(* ========================================================================= *)
+(* Lisp symbolic expressions as an object language in HOL (and ML).          *)
+(* Content of the file:                                                      *)
+(*  - Sexps in ML, together with a parser and a printer.                     *)
+(*  - Sexps in HOL, with syntax.                                             *)
+(*  - A meta-circular evaluator for a lisp-like language.                    *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Elementary support for sexps in ML.                                       *)
+(* ------------------------------------------------------------------------- *)
+
+type sexp =
+    Symbol of string
+  | List of (sexp list);;
+
+(* ------------------------------------------------------------------------- *)
+(* Printer for ML sexps.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+let rec pp_print_sexp fmt =
+  function
+    Symbol s -> pp_print_string fmt s
+  | List l ->
+      pp_open_box fmt 0; pp_print_string fmt "("; pp_open_box fmt 2;
+      pp_print_sexps fmt l;
+      pp_close_box fmt (); pp_print_string fmt ")"; pp_close_box fmt ()
+and pp_print_sexps fmt =
+  function
+    [] -> ()
+  | h :: t ->
+     pp_print_sexp fmt h;
+     do_list (fun s -> pp_print_space fmt (); pp_print_sexp fmt s) t;;
+
+let string_of_sexp = print_to_string pp_print_sexp;;
+
+(* ------------------------------------------------------------------------- *)
+(* Parse for ML sexps.                                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let rec parse_sexp =
+  function
+    [] -> raise Noparse
+  | Resword ")" :: _ -> raise Noparse
+  | Resword "(" :: rest ->
+      (many parse_sexp ++ a (Resword ")") >> fun x -> List (fst x)) rest
+  | Resword s :: rest | Ident s :: rest -> Symbol s,rest;;
+
+let sexp_of_string s =
+  let tm,l = (parse_sexp o lex o explode) s in
+  if l = [] then tm
+  else failwith "Unparsed input following sexp";;
+
+(* ------------------------------------------------------------------------- *)
+(* Internal representation of sexps.                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let sexp_INDUCT,sexp_RECUR = define_type
+  "sexp = Symbol string
+        | List (sexp list)";;
+
+(* ------------------------------------------------------------------------- *)
+(* Basic constructors and destructors.                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let mk_symbol =
+  let c = `Symbol` in
+  fun s -> mk_comb(c,mk_string s);;
+
+let list_mk_sexp =
+  let ty = `:sexp`
+  and c = `List` in
+  fun l -> mk_comb(c,mk_list(l,ty));;
+
+let dest_symbol tm =
+  try match tm with
+        Comb(Const("Symbol",_),stm) -> dest_string stm
+      | _ -> fail()
+  with Failure _ -> failwith "dest_symbol";;
+
+let list_dest_sexp tm =
+  try match tm with
+        Comb(Const("List",_),ltm) -> dest_list ltm
+     | _ -> fail()
+  with Failure _ -> failwith "list_dest_sexp";;
+
+(* ------------------------------------------------------------------------- *)
+(* Conversion between internal and external sexps.                           *)
+(* ------------------------------------------------------------------------- *)
+
+let rec mk_sexp =
+  function
+    Symbol s -> mk_symbol s
+  | List l -> list_mk_sexp (map mk_sexp l);;
+
+let rec dest_sexp tm =
+  try Symbol (dest_symbol tm) with Failure _ ->
+  try List (map dest_sexp (list_dest_sexp tm)) with Failure _ ->
+  failwith "dest_sexp";;
+
+(* ------------------------------------------------------------------------- *)
+(* Construction of sexp preterms.                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let pmk_list els =
+  itlist (fun x y -> Combp(Combp(Varp("CONS",dpty),x),y))
+         els (Varp("NIL",dpty));;
+
+let pmk_bool =
+  let tt = Varp("T",dpty) and ff = Varp("F",dpty) in
+  fun b -> if b then tt else ff;;
+
+let pmk_char c =
+  let lis = map (fun i -> pmk_bool((c / (1 lsl i)) mod 2 = 1)) (0--7) in
+  itlist (fun x y -> Combp(y,x)) lis (Varp("ASCII",dpty));;
+
+let pmk_string s =
+  let ns = 0--(String.length s - 1) in
+  let c i = pmk_char (Char.code(String.get s i)) in
+  pmk_list (map c ns);;
+
+let pmk_symbol =
+  let sy = Varp("Symbol",dpty) in
+  fun s -> Combp(sy,pmk_string s);;
+
+let list_pmk_sexp =
+  let lst = Varp("List",dpty) in
+  fun l -> Combp(lst,pmk_list l);;
+
+let rec pmk_sexp =
+  function
+    Symbol s -> pmk_symbol s
+  | List l -> list_pmk_sexp (map pmk_sexp l);;
+
+(* ------------------------------------------------------------------------- *)
+(* Custom printer for sexps.                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let pp_sexp_printer fmt tm =
+  let l = list_dest_sexp tm in
+  pp_print_string fmt "'(";
+  pp_open_box fmt 0;
+  pp_print_sexps fmt (map dest_sexp l);
+  pp_close_box fmt ();
+  pp_print_string fmt ")";;
+
+install_user_printer("sexp",pp_sexp_printer);;
+
+(* ------------------------------------------------------------------------- *)
+(* Custom parser for sexps.                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let parse_qsexp =
+  let parse_sexps = many parse_sexp >> map pmk_sexp in
+  let parse_tail_sexp =
+    parse_sexps ++ a (Resword ")") >> list_pmk_sexp o fst in
+  function 
+    Ident "'" :: Resword "(" :: rest -> parse_tail_sexp rest
+  | _ -> raise Noparse;;
+
+install_parser("sexp",parse_qsexp);;
+
+(* ------------------------------------------------------------------------- *)
+(* Object theory of sexps.                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let IS_SYMBOL = new_recursive_definition sexp_RECUR
+  `(!a. IS_SYMBOL (Symbol a) = T) /\
+   (!l. IS_SYMBOL (List l) = F)`;;
+
+let SEXPARGS = define
+  `!a l. SEXPARGS (List (CONS a l)) = l`;;
+
+let SEXPFUN = define
+  `!a l. SEXPFUN (List (CONS a l)) = a`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Misc list helper theory.                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+(* Non serve, basta ALL2 *)
+let LISTREL_RULES,LISTREL_INDUCT,LISTREL_CASES = new_inductive_definition
+  `LISTREL R [] [] /\
+   (!h h':A t t'. R h h' /\ LISTREL R t t'
+                  ==> LISTREL R (CONS h t) (CONS h' t'))`;;
+
+let LISTREL_NIL,LISTREL_CONS =
+  CONJ_PAIR (REWRITE_RULE [FORALL_AND_THM] LISTREL_RULES);;
+
+let LISTREL_MONO = prove
+  (`!R R' l m. (!x:A y:B. R x y ==> R' x y) /\ LISTREL R l m
+               ==> LISTREL R' l m`,
+   REWRITE_TAC[IMP_CONJ; RIGHT_FORALL_IMP_THM] THEN REPEAT GEN_TAC THEN
+   DISCH_TAC THEN MATCH_MP_TAC LISTREL_INDUCT THEN
+   ASM_MESON_TAC[LISTREL_RULES]);;
+
+(* Rev-Assoc relation. *)
+let RELASSOC_RULES,RELASSOC_INDUCT,RELASSOC_CASES = new_inductive_definition
+  `(!k:A v:B l. RELASSOC k (CONS (v,k) l) v) /\
+   (!k k' v v' l. ~(k = k') /\ RELASSOC k l v'
+                  ==> RELASSOC k (CONS (v,k') l) v')`;;
+
+let RELASSOC_HEAD,REALASSOC_TAIL = CONJ_PAIR RELASSOC_RULES;;
+
+(* Zip-relation. *)
+let ZIPPED_RULES,ZIPPED_INDUCT,ZIPPED_CASES = new_inductive_definition
+  `ZIPPED [] [] [] /\
+   (!x xs y ys zs. ZIPPED xs ys zs
+                   ==> ZIPPED (CONS x xs) (CONS y ys) (CONS (x,y) zs))`;;
+
+let ZIPPED_NIL,ZIPPED_CONS = CONJ_PAIR ZIPPED_RULES;;
+
+(* ------------------------------------------------------------------------- *)
+(* Handy matcher for sexp analysis.                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let MATCHSYMB_RULES,MATCHSYMB_INDUCT,MATCHSYMB_CASES =
+  new_inductive_definition
+  `!s. MATCHSYMB (Symbol s) s`;;
+
+let MATCHTAGGED_RULES,MATCHTAGGED_INDUCT,MATCHTAGGED_CASES =
+  new_inductive_definition
+  `!s l. MATCHTAGGED s (List (CONS (Symbol s) l)) l`;;
+
+(* Matcher for lisp-like lambda forms. *)
+let MATCHPROC_RULES,MATCHPROC_INDUCT,MATCHPROC_CASES = new_inductive_definition
+  `!sexp vlist vars body.
+     MATCHTAGGED "lambda" sexp [List vlist; body] /\
+     LISTREL MATCHSYMB vlist vars
+     ==> MATCHPROC sexp vars body`;;
+
+let _ = prove
+ (`MATCHPROC '(lambda (x y) (p x y)) ["x"; "y"] '(p x y)`,
+  GEN_REWRITE_TAC I [MATCHPROC_CASES] THEN
+  EXISTS_TAC `[Symbol "x"; Symbol "y"]` THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
+  MATCH_MP_TAC LISTREL_CONS THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHSYMB_RULES; ALL_TAC] THEN
+  MATCH_MP_TAC LISTREL_CONS THEN CONJ_TAC THENL
+  [MATCH_ACCEPT_TAC MATCHSYMB_RULES; MATCH_ACCEPT_TAC LISTREL_NIL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Lispish meta-circular evaluator.                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let MATCHBETA_RULES,MATCHBETA_INDUCT,MATCHBETA_CASES = new_inductive_definition
+  `!fn vars args body.
+      MATCHPROC fn vars body
+      ==> MATCHBETA (List (CONS fn args)) vars body args`;;
+
+let EVAL_RULES,EVAL_INDUCT,EVAL_CASES =
+  let EVAL_RULES',EVAL_INDUCT',EVAL_CASES' = new_inductive_definition
+    `(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
+     (!env env' sexp vars body args args' ret.
+         MATCHBETA sexp vars body args /\ LISTREL (EVAL env) args args' /\
+         ZIPPED args' vars env' /\ EVAL (APPEND env' env) body ret
+         ==> EVAL env sexp ret) /\
+     (!env sexp l l'. MATCHTAGGED "list" sexp l /\ LISTREL (EVAL env) l l'
+                      ==> EVAL env sexp (List l')) /\
+     (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
+                        ==> EVAL env sexp quoted)` in
+  let pth = prove
+   (hd (hyp EVAL_RULES'),
+    MESON_TAC[injectivity "sexp"; LISTREL_MONO]) in
+  PROVE_HYP pth EVAL_RULES',
+  PROVE_HYP pth EVAL_INDUCT',
+  PROVE_HYP pth EVAL_CASES';;
+
+let [EVAL_SYMB; EVAL_BETA; EVAL_LIST; EVAL_QUOTED] = CONJUNCTS EVAL_RULES;;
+
+(* ------------------------------------------------------------------------- *)
+(* The classical quine in scheme.  Note that our evaluation do not use       *)
+(* dynamic (non-static) scope. But this code do not depend on this.          *)
+(*                                                                           *)
+(* (define quinec                                                            *)
+(*   '((lambda (x) (list x (list (quote quote) x)))                          *)
+(*     (quote                                                                *)
+(*       (lambda (x) (list x (list (quote quote) x))))))                     *)
+(* ------------------------------------------------------------------------- *)
+
+let QUINE = prove
+ (`EVAL []
+     '((lambda (x) (list x (list (quote quote) x)))
+       (quote (lambda (x) (list x (list (quote quote) x)))))
+     '((lambda (x) (list x (list (quote quote) x)))
+       (quote (lambda (x) (list x (list (quote quote) x)))))`,
+  MATCH_MP_TAC EVAL_BETA THEN
+  REWRITE_TAC[APPEND_NIL; IMP_CONJ; RIGHT_EXISTS_AND_THM] THEN
+  MAP_EVERY EXISTS_TAC
+   [`['(lambda (x) (list x (list (quote quote) x))), "x"]`;
+    `["x"]`;
+    `'(list x (list (quote quote) x))`;
+    `['(quote (lambda (x) (list x (list (quote quote) x))))]`] THEN
+  CONJ_TAC THENL
+  [MATCH_MP_TAC MATCHBETA_RULES THEN MATCH_MP_TAC MATCHPROC_RULES THEN
+   EXISTS_TAC `[Symbol "x"]` THEN
+   CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
+   MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL; MATCHSYMB_RULES];
+   ALL_TAC] THEN
+  EXISTS_TAC `['(lambda (x) (list x (list (quote quote) x)))]` THEN
+  CONJ_TAC THENL
+  [MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
+   MATCH_MP_TAC EVAL_QUOTED THEN MATCH_ACCEPT_TAC MATCHTAGGED_RULES;
+   ALL_TAC] THEN
+  CONJ_TAC THENL
+  [MATCH_MP_TAC ZIPPED_CONS THEN MATCH_ACCEPT_TAC ZIPPED_NIL; ALL_TAC] THEN
+  MATCH_MP_TAC EVAL_LIST THEN
+  EXISTS_TAC `[Symbol "x"; '(list (quote quote) x)]` THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
+  MATCH_MP_TAC LISTREL_CONS THEN CONJ_TAC THENL
+  [MATCH_MP_TAC EVAL_SYMB THEN MATCH_ACCEPT_TAC RELASSOC_HEAD; ALL_TAC] THEN
+  MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
+  MATCH_MP_TAC EVAL_LIST THEN EXISTS_TAC `['(quote quote); Symbol "x"]` THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
+  MATCH_MP_TAC LISTREL_CONS THEN CONJ_TAC THENL
+  [MATCH_MP_TAC EVAL_QUOTED THEN MATCH_ACCEPT_TAC MATCHTAGGED_RULES;
+   ALL_TAC] THEN
+  MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
+  MATCH_MP_TAC EVAL_SYMB THEN MATCH_ACCEPT_TAC RELASSOC_HEAD);;
