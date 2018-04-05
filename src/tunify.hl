@@ -124,3 +124,151 @@ term_ty_unify [`x:A`] `1` `x:A`;;
 
 term_ty_unify [`x:A`;`y:B`] `1,x:A` `y:B,T`;;
 term_ty_unify [`x:A`;`y:B`] `y:B,T` `1,x:A`;;
+
+(* Non funziona! *)
+
+term_ty_unify [`x:A list`] `x:num list` `[]:A list`;;
+term_ty_unify [`x:A list`] `x:num list` `[]:B list`;;
+term_ty_unify [`x:A list`] `x:num list` `[]:num list`;;
+
+
+(* ------------------------------------------------------------------------- *)
+(* Nuovo tentativo.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+  let tyaugment1 sofar (s,x) =
+    let s' = type_subst sofar s in
+    if mem x (tyvars s) && not (s = x) then failwith "augment_tyinsts"
+    else (s',x);;
+
+  let raw_augment_tyinsts p tyinsts =
+    p::(map (tyaugment1 [p]) tyinsts);;
+
+  let augment_tyinsts(t,v) tyinsts =
+    let t' = type_subst tyinsts t in
+    if t' = v then tyinsts
+    else if mem v (tyvars t') then failwith "augment_insts"
+    else raw_augment_tyinsts (t',v) tyinsts;;
+
+  let rec tunify ty1 ty2 sofar =
+    if ty1 = ty2 then sofar else
+    if is_vartype ty1 then
+      try let ty1' = rev_assoc ty1 sofar in
+          tunify ty1' ty2 sofar
+      with Failure "find" -> augment_tyinsts (ty2,ty1) sofar
+    else if is_vartype ty2 then
+      try let ty2' = rev_assoc ty2 sofar in
+          tunify ty2' ty1 sofar
+      with Failure "find" -> augment_tyinsts (ty1,ty2) sofar
+    else
+    let n1,lty1 = dest_type ty1 in
+    let n2,lty2 = dest_type ty2 in
+    if n1 <> n2 then failwith "type_unify" else
+    itlist2 tunify lty1 lty2 sofar;;
+
+(*
+  let type_unify : hol_type -> hol_type -> (hol_type * hol_type) list =
+    fun ty1 ty2 -> tunify ty1 ty2 [];;
+
+  let rec type_term_unify : term -> term ->
+       (hol_type * hol_type) list -> (hol_type * hol_type) list =
+    fun tm1 tm2 sofar ->
+      if is_var tm1 || is_const tm1 || is_var tm2 || is_const tm2 then
+        tunify (type_of tm1) (type_of tm2) sofar
+      else if is_abs tm1 then
+        type_term_unify (body tm1) (body tm2)
+          (type_term_unify (bndvar tm1) (bndvar tm2) sofar)
+      else
+        let l1,r1 = dest_comb tm1 in
+        let l2,r2 = dest_comb tm2 in
+        type_term_unify l1 l2 (type_term_unify r1 r2 sofar);;
+
+  let term_ty_unify : term list -> term -> term -> instantiation =
+    fun vars tm1 tm2 ->
+      let tyinsts = type_term_unify tm1 tm2 [] in
+      let finst = inst tyinsts in
+      let tm1' = finst tm1
+      and tm2' = finst tm2
+      and vars' = map finst vars in
+      let insts = term_unify vars' tm1' tm2' in
+      compose_insts ([],[],tyinsts) insts;;
+*)
+
+  let augment1 sofar (s,x) =
+    let s' = subst sofar s in
+    if vfree_in x s && not (s = x) then failwith "augment_insts"
+    else (s',x);;
+
+  let raw_augment_insts p insts =
+    p::(map (augment1 [p]) insts);;
+
+  let augment_insts(t,v) insts =
+    let t' = vsubst insts t in
+    if t' = v then insts
+    else if vfree_in v t' then failwith "augment_insts"
+    else raw_augment_insts (t',v) insts;;
+
+
+let rec findvar vtm vars sofar =
+  let vname,vty = dest_var vtm in
+  match vars with
+    Var(s,ty) as v :: rest ->
+      if s <> vname then findvar vtm rest sofar else
+      (try let tysofar' = tunify vty ty (snd sofar) in
+          let vty' = type_subst tysofar' vty in
+          let vtm' = if vty = vty' then vtm else mk_var(vname,vty') in
+          let v' = if vty' = ty then v else mk_var(s,vty') in
+          let tmsofar' = augment_insts (v',vtm') (fst sofar) in
+          (tmsofar',tysofar')
+       with Failure _ -> findvar vtm rest sofar)
+  | _ -> failwith "findvar";;
+
+  let rec tyunify vars tm1 tm2 sofar =
+    if tm1 = tm2 then sofar
+    else if is_var tm1 then findvar tm1 vars sofar
+    else if is_var tm2 then findvar tm2 vars sofar
+    else if is_abs tm1 then
+      let tm1' = body tm1
+      and tm2' = subst [bndvar tm1,bndvar tm2] (body tm2) in
+      tyunify vars tm1' tm2' sofar
+    else if is_abs tm1 then
+      let sofar' = tyunify vars (bndvar tm1) (bndvar tm2) sofar in
+      let tm1' = inst (snd sofar') tm1
+      and tm2' = inst (snd sofar') tm2 in
+      let btm1 = body tm1' in
+      let btm2 = subst [bndvar tm1',bndvar tm2'] (body tm2') in
+      tyunify vars btm1 btm2 sofar'
+    else
+      let l1,r1 = dest_comb tm1
+      and l2,r2 = dest_comb tm2 in
+      tyunify vars l1 l2 (tyunify vars r1 r2 sofar);;
+
+let tyunif vars tm1 tm2 = tyunify vars tm1 tm2 ([],[]);;
+
+
+
+
+(* Test tyunif *)
+tyunif [`x:A`] `x:A` `x:A`;;
+
+findvar `x:A` [`x:A`] ([],[]);;
+findvar `b:A` [`x:A`] ([],[]);;
+
+term_ty_unify  [`x:A`] `x:A` `b:A`;;
+tyunif [`x:A`] `x:A` `b:A`;;
+tyunif [`x:A`] `x:A` `x:B`;;
+tyunif [`x:B`] `x:A` `x:B`;;
+tyunif [`x:B`] `x:A` `y:B`;;
+tyunif [`x:B`] `y:B` `x:A`;;
+
+tyunif [`x:A`] `x:A` `1`;;
+tyunif [`x:A`] `1` `x:A`;;
+
+tyunif [`x:A`;`y:B`] `1,x:A` `y:B,T`;;
+tyunif [`x:A`;`y:B`] `y:B,T` `1,x:A`;;
+
+(* Non funziona! *)
+
+tyunif [`x:A list`] `x:num list` `[]:A list`;;
+tyunif [`x:A list`] `x:num list` `[]:B list`;;
+tyunif [`x:A list`] `x:num list` `[]:num list`;;
