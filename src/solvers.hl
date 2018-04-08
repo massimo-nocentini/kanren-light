@@ -95,7 +95,25 @@ take 10 (solve REFL_SLV `??m n. m + n = 1 + 2`);;
 take 10 (solve REFL_SLV `??m n. m + n = a + b`);;
 take 10 (solve REFL_SLV `??m n. FST (1,(m:A)) = FST (1,(n:B))`);;
 
+(* ------------------------------------------------------------------------- *)
+(* Refresh type variables in a theorem.                                      *)
+(* ------------------------------------------------------------------------- *)
+
+let genty =
+  let count = ref 0 in
+  let genty () =
+    let ty = mk_vartype("ty"^string_of_int !count) in
+    count := !count + 1;
+    ty in
+  genty;;
+
+let TYFRESH th =
+  let tyl = type_vars_in_term (concl th) in
+  let i = map (fun ty -> genty(),ty) tyl in
+  INST_TYPE i th;;
+
 let SPEC_FRESH th =
+  let th = TYFRESH th in
   let v,th' = SPEC_VAR th in
   let v' = genvar(type_of v) in
   v',INST [v',v] th';;
@@ -156,7 +174,9 @@ let RULE_SLV : thm_solver = fun th ->
    SOLVER (fun mvs (asl,w) ->
      let avs,th = SPEC_FRESH_ALL th in
      let ant,con = dest_imp(concl th) in
+     (*
      let evs = filter (fun v -> vfree_in v ant && not (vfree_in v con)) avs in
+     *)
      let inst = term_ty_unify (union avs mvs) con w in
      let sth = INSTANTIATE inst th in
      let lant = fst(dest_imp(concl sth)) in
@@ -371,9 +391,26 @@ let INTERLEAVE_X_ASSUM_SLV (tslv:thm_solver) : solver =
 (* A simple Prolog-like solver.                                              *)
 (* ------------------------------------------------------------------------- *)
 
+parse_as_infix("IS",(10,"right"));;
+
+let IS_DEF = new_definition
+  `(IS) = (=):A->A->bool`;;
+
+let IS_SLV : conv -> solver =
+  fun conv ->
+    let conv' = RAND_CONV conv THENC REWRITE_CONV[IS_DEF] in
+    THEN_SLV (TACTIC_SLV (CONV_TAC conv')) REFL_SLV;;
+
+(* ------------------------------------------------------------------------- *)
+(* FIXME: The conversion strategy for IS_SLV is hard coded!                  *)
+(* ------------------------------------------------------------------------- *)
+
 let PROLOG_SLV thl : solver =
   let RAW_PROLOG_SLV thl : solver =
-    let rec PROLOG_SLV g = MAP_COLLECT_SLV STEP_SLV thl g
+    let rec PROLOG_SLV g =
+      CONCAT_SLV (IS_SLV (REWRITE_CONV[APPEND; APPEND_NIL]))
+                 (MAP_COLLECT_SLV STEP_SLV thl)
+                 g
     and STEP_SLV : thm_solver =
       fun th ->
         try let rule = RULE_SLV th in
@@ -449,3 +486,4 @@ ITAUT `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
           padre a b
           ?- nonno a x`;;
 *)
+
