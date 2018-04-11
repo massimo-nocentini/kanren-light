@@ -155,28 +155,3 @@ term_ty_unify [`x:A list`] `x:num list` `[]:B list`;;
 term_ty_unify [`x:A list`] `x:num list` `[]:num list`;;
 
 *)
-
-(*
-  let rec type_term_unify : term -> term ->
-       (hol_type * hol_type) list -> (hol_type * hol_type) list =
-    fun tm1 tm2 sofar ->
-      if is_var tm1 || is_const tm1 || is_var tm2 || is_const tm2 then
-        tunify (type_of tm1) (type_of tm2) sofar
-      else if is_abs tm1 then
-        type_term_unify (body tm1) (body tm2)
-          (type_term_unify (bndvar tm1) (bndvar tm2) sofar)
-      else
-        let l1,r1 = dest_comb tm1 in
-        let l2,r2 = dest_comb tm2 in
-        type_term_unify l1 l2 (type_term_unify r1 r2 sofar);;
-
-  let term_ty_unify : term list -> term -> term -> instantiation =
-    fun vars tm1 tm2 ->
-      let tyinsts = type_term_unify tm1 tm2 [] in
-      let finst = inst tyinsts in
-      let tm1' = finst tm1
-      and tm2' = finst tm2
-      and vars' = map finst vars in
-      let insts = term_unify vars' tm1' tm2' in
-      compose_insts ([],[],tyinsts) insts;;
-*)

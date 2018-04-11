@@ -136,12 +136,10 @@ let ACCEPT_SLV : thm_solver =
 let ACCEPT_SLV : thm_solver =
   fun th -> SOLVER (fun mvs (asl,w) ->
     let avs,th' = SPEC_FRESH_ALL th in
-    let inst = term_ty_unify (union avs mvs) (concl th') w in
-    let sth = INSTANTIATE inst th' in
+    let insts = term_ty_unify (union avs mvs) (concl th') w in
+    let sth = INSTANTIATE insts th' in
     let just i _ = INSTANTIATE_ALL i sth in
-    (avs,inst),[],just);;
-
-get (solve (ACCEPT_SLV (MESON [] `!a. 1,a:A = 1,a`)) `??x b. 1,x = b,b`);;
+    (avs,insts),[],just);;
 
 (* Implementation that uses term_unify
    (no type instantiation, pure first-order. *)
