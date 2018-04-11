@@ -137,7 +137,7 @@ let ACCEPT_SLV : thm_solver =
   fun th -> SOLVER (fun mvs (asl,w) ->
     let avs,th' = SPEC_FRESH_ALL th in
     let insts = term_ty_unify (union avs mvs) (concl th') w in
-    let sth = INSTANTIATE insts th' in
+    let sth = INSTANTIATE_ALL insts th' in
     let just i _ = INSTANTIATE_ALL i sth in
     (avs,insts),[],just);;
 
@@ -172,11 +172,8 @@ let RULE_SLV : thm_solver = fun th ->
    SOLVER (fun mvs (asl,w) ->
      let avs,th = SPEC_FRESH_ALL th in
      let ant,con = dest_imp(concl th) in
-     (*
-     let evs = filter (fun v -> vfree_in v ant && not (vfree_in v con)) avs in
-     *)
      let inst = term_ty_unify (union avs mvs) con w in
-     let sth = INSTANTIATE inst th in
+     let sth = INSTANTIATE_ALL inst th in
      let lant = fst(dest_imp(concl sth)) in
      let just i (th :: _) =
        try MP (INSTANTIATE_ALL i sth) th
@@ -403,12 +400,10 @@ let IS_SLV : conv -> solver =
 (* FIXME: The conversion strategy for IS_SLV is hard coded!                  *)
 (* ------------------------------------------------------------------------- *)
 
-let PROLOG_SLV thl : solver =
+let PROLOG_SLV conv thl : solver =
   let RAW_PROLOG_SLV thl : solver =
     let rec PROLOG_SLV g =
-      CONCAT_SLV (IS_SLV (REWRITE_CONV[APPEND; APPEND_NIL]))
-                 (MAP_COLLECT_SLV STEP_SLV thl)
-                 g
+      CONCAT_SLV (IS_SLV conv) (MAP_COLLECT_SLV STEP_SLV thl) g
     and STEP_SLV : thm_solver =
       fun th ->
         try let rule = RULE_SLV th in
@@ -423,7 +418,7 @@ let PROLOG_SLV thl : solver =
 (* ------------------------------------------------------------------------- *)
 
 let sols = take 10
-  (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
+  (solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV))
          `??a b:A.
              (!x y z. padre x y /\ antenato y z ==> antenato x z) &&
              (!x y. padre x y ==> antenato x y) &&
@@ -432,7 +427,7 @@ let sols = take 10
 map (concl o snd) sols;;
 
 let sols = take 10
-  (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
+  (solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV))
          `??a b:A.
              (!x y z. padre x y /\ antenato y z ==> antenato x z) &&
              (!x. antenato x x) &&
@@ -441,7 +436,7 @@ let sols = take 10
 map (concl o snd) sols;;
 
 let sols = take 10
-  (solve (POP_ASSUM_LIST_SLV PROLOG_SLV)
+  (solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV))
          `??a b:A.
              (!x y z. persona z /\ padre x y /\ antenato y z ==> antenato x z) &&
              (!x. persona x ==> antenato x x) &&
@@ -451,7 +446,7 @@ let sols = take 10
 map (concl o snd) sols;;
 
 (setify o map (concl o snd) o take 100 o
- solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
+ solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV)))
   `??a b:A.
       (!x y z. antenato x y /\ antenato y z ==> antenato x z) &&
       (!x. antenato x x) &&
@@ -477,11 +472,11 @@ ITAUT `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
        padre a b
        ==> ?x:A. nonno a x`;;
 
-(map (concl o snd) o take 100 o solve (POP_ASSUM_LIST_SLV PROLOG_SLV))
+(map (concl o snd) o take 100 o
+ solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV)))
   `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
           padre c d &&
           padre a c &&
           padre a b
           ?- nonno a x`;;
 *)
-

@@ -98,6 +98,7 @@ let [EVAL_SYMB; EVAL_BETA; EVAL_LIST; EVAL_QUOTED] = CONJUNCTS EVAL_RULES_OLD;;
 (*       (lambda (x) (list x (list (quote quote) x))))))                     *)
 (* ------------------------------------------------------------------------- *)
 
+(*
 let QUINE = prove
  (`let quine = '((lambda (x) (list x (list (quote quote) x)))
                  (quote (lambda (x) (list x (list (quote quote) x))))) in
@@ -136,6 +137,7 @@ let QUINE = prove
    ALL_TAC] THEN
   MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
   MATCH_MP_TAC EVAL_SYMB THEN MATCH_ACCEPT_TAC RELASSOC_HEAD);;
+*)
 
 let EVAL_RULES = prove
  (`(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
@@ -163,7 +165,7 @@ let APPEND_RULES = prove
    (!x xs ys zs. APPEND xs ys = zs ==> APPEND (CONS x xs) ys = CONS x zs)`,
   REWRITE_TAC[APPEND; CONS_11]);;
 
-let EVAL_SLV = PROLOG_SLV
+let EVAL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL])
   [MATCHSYMB_RULES; MATCHTAGGED_RULES;
    REWRITE_RULE[FORALL_AND_THM] LISTREL_RULES;
    RELASSOC_RULES; ZIPPED_RULES; MATCHPROC_RULES; MATCHBETA_RULES;
