@@ -1,0 +1,45 @@
+(* ========================================================================= *)
+(* Test for solvers.hl.                                                      *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Tests REFL_SLV.                                                           *)
+(* ------------------------------------------------------------------------- *)
+
+print_endline "Inizio test: REFL_SLV";;
+
+take 10 (solve REFL_SLV `??m n. m + n = 1 + 2`);;
+take 10 (solve REFL_SLV `??m n. m + n = a + b`);;
+take 10 (solve REFL_SLV `??m n. FST (1,(m:A)) = FST (1,(n:B))`);;
+
+let [i,th] = take 3 (solve REFL_SLV `??m n. m + n = 1 + 2`) in
+assert (i = ([], [(`1`, `m:num`); (`2`, `n:num`)], []));
+assert (concl th = `1 + 2 = 1 + 2`);;
+
+print_endline "Fine test: REFL_SLV";;
+
+(* ------------------------------------------------------------------------- *)
+(* Tests THEN_SLV.                                                           *)
+(* ------------------------------------------------------------------------- *)
+
+print_endline "Inizio test: THEN_SLV";;
+
+let [i,th] = take 10 (solve (THEN_SLV CONJ_SLV REFL_SLV)
+                         `??m n. m + n = n + m /\ n + n = n + 1`) in
+assert (i = ([], [(`1`, `n:num`); (`1`, `m:num`)], []));
+assert (concl th = `1 + 1 = 1 + 1 /\ 1 + 1 = 1 + 1`);;
+
+take 10 (solve (THENL_SLV CONJ_SLV [ACCEPT_SLV ADD_SYM; REFL_SLV])
+  `??m n. m + n = n + m /\ n + n = n + 1`);;
+
+take 10 (solve (THENL_SLV CONJ_SLV [REFL_SLV; ACCEPT_SLV ADD_SYM])
+  `??m n. m + n = n + m /\ n + n = n + 1`);;
+
+let [i,th] =
+  take 10 (solve (THEN_SLV (RULE_SLV MOD_0) (ACCEPT_SLV (ASSUME `~(b = 0)`)))
+                 `??a b c. ~(b = 0) ?- a MOD b = c`) in
+  assert (instantiate i `a:num` = `0`);
+  assert (instantiate i `c:num` = `0`);
+  assert (concl th = `0 MOD b = 0`);;
+
+print_endline "Fine test: THEN_SLV";;

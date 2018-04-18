@@ -123,6 +123,7 @@ let term_ty_unify : term list -> term -> term -> instantiation =
 (*
 
 (* type_unifty *)
+;;
 type_unify `:A` `:B`;;
 type_unify `:A` `:A`;;
 type_unify `:A` `:A list`;;
@@ -147,8 +148,6 @@ term_ty_unify [`x:A`] `1` `x:A`;;
 
 term_ty_unify [`x:A`;`y:B`] `1,x:A` `y:B,T`;;
 term_ty_unify [`x:A`;`y:B`] `y:B,T` `1,x:A`;;
-
-(* Non funziona! *)
 
 term_ty_unify [`x:A list`] `x:num list` `[]:A list`;;
 term_ty_unify [`x:A list`] `x:num list` `[]:B list`;;

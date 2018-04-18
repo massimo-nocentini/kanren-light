@@ -73,9 +73,7 @@ let rec concat (c1: 'a stream) (c2: 'a stream) : 'a stream =
 (* Examples.                                                                 *)
 (* ------------------------------------------------------------------------- *)
 
-(*
 let rec const (x : 'a) : 'a stream = Cons(x, fun _ -> const x);;
-*)
 
 let rec nats n = Cons(n, fun _ -> nats (n+1));;
 

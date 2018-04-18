@@ -62,20 +62,6 @@ do_list tst
    `3 >= 2`; `3 > 2`; `2 >= 2`; `~(2 >= 3)`;
    `SUC 3 = 4`];;
 
-(*;;
-take 10 (solve ARITH_SLV `2 <= 3`);;
-take 10 (solve ARITH_SLV `~(3 <= 2)`);;
-take 10 (solve ARITH_SLV `2 < 3`);;
-take 10 (solve ARITH_SLV `~(3 < 2)`);;
-take 10 (solve ARITH_SLV `3 > 2`);;
-take 10 (solve ARITH_SLV `3 >= 2`);;
-take 10 (solve ARITH_SLV `~(2 > 3)`);;
-take 10 (solve ARITH_SLV `~(2 >= 3)`);;
-take 10 (solve ARITH_SLV `SUC 3 = 4`);;
-
-take 10 (solve ARITH_SLV `??m. SUC 3 = m`);;
-*)
-
 (* ------------------------------------------------------------------------- *)
 (* Length.                                                                   *)
 (* ------------------------------------------------------------------------- *)
@@ -85,32 +71,12 @@ let NUM_LENGTH_HORN = prove
   (!h:num t n m. LENGTH t = m /\ SUC m = n ==> LENGTH (CONS h t) = n)`,
   REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
 
-(* Examples. *)
-(*;;
-take 10 (solve (PROLOG_SLV NO_CONV [NUM_LENGTH_HORN; ARITH_SUC_HORN])
-               `??n. LENGTH [1;2;3] = n`);;
-*)
-
-let [_,th] =
-  (take 10 o solve (PROLOG_SLV NO_CONV [NUM_LENGTH_HORN; ARITH_SUC_HORN]))
-  `??n. LENGTH [1;2;3] = n` in 
-assert (th = REWRITE_CONV[LENGTH;ARITH] `LENGTH [1; 2; 3]`);;
-
-take 1 (solve (PROLOG_SLV NO_CONV [NUM_LENGTH_HORN; ARITH_SUC_HORN])
-              `??xs:num list. LENGTH xs = 3`);;
-
 (* With type instantiation. *)
 
 let LENGTH_HORN = prove
  (`LENGTH ([]:A list) = 0 /\
   (!h:A t n m. LENGTH t = m /\ SUC m = n ==> LENGTH (CONS h t) = n)`,
   REWRITE_TAC[LENGTH] THEN MESON_TAC[]);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [LENGTH_HORN; ARITH_SUC_HORN])
-               `??n. LENGTH [1;2;3] = n`);;
-
-take 1 (solve (PROLOG_SLV NO_CONV [LENGTH_HORN; ARITH_SUC_HORN])
-              `??xs:num list. LENGTH xs = 3`);;
 
 (* ------------------------------------------------------------------------- *)
 (* Append.                                                                   *)
@@ -127,31 +93,6 @@ let NUM_APPEND_HORN = INST_TYPE [`:num`,aty] APPEND_HORN;;
 
 let NUM_APPEND_NIL, NUM_APPEND_CONS = CONJ_PAIR NUM_APPEND_HORN;;
 
-(* Examples. *)
-
-take 10 (solve
-  (THEN_SLV (REPEAT_SLV (RULE_SLV NUM_APPEND_CONS))
-            (ACCEPT_SLV NUM_APPEND_NIL))
-  `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [NUM_APPEND_HORN])
-               `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [NUM_APPEND_HORN])
-               `??xs ys. APPEND xs ys = [1;2;3]`);;
-
-(* With type instantiation. *)
-
-take 10 (solve
-  (THEN_SLV (REPEAT_SLV (RULE_SLV APPEND_CONS)) (ACCEPT_SLV APPEND_NIL))
-  `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [APPEND_HORN])
-               `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [APPEND_HORN])
-               `??xs ys. APPEND xs ys = [1;2;3]`);;
-
 (* ------------------------------------------------------------------------- *)
 (* Reverse.                                                                  *)
 (* ------------------------------------------------------------------------- *)
@@ -165,37 +106,6 @@ let REVERSE_HORN = prove
 let NUM_REVERSE_HORN = INST_TYPE [`:num`,aty] REVERSE_HORN;;
 
 let NUM_REVERSE_NIL, NUM_REVERSE_CONS = CONJ_PAIR NUM_REVERSE_HORN;;
-
-(* Examples *)
-
-take 10 (solve (PROLOG_SLV NO_CONV [NUM_REVERSE_HORN; NUM_APPEND_HORN])
-               `??ys. REVERSE [1;2;3] = ys`);;
-
-(* Alternative version. *)
-
-let REVERSE_MIXED_HORN = prove
- (`!x:A xs ys. REVERSE xs = ys ==> REVERSE (CONS x xs) = APPEND ys [x]`,
-  REWRITE_TAC[REVERSE] THEN MESON_TAC[]);;
-
-let NUM_REVERSE_MIXED_HORN = INST_TYPE [`:num`,aty] REVERSE_MIXED_HORN;;
-
-(* Examples. *)
-
-take 10 (solve (PROLOG_SLV NO_CONV
-                           ([NUM_REVERSE_MIXED_HORN; NUM_REVERSE_NIL;
-                             NUM_APPEND_HORN]))
-               `??ys. REVERSE [1;2;3] = ys`);;
-
-(* With type instantiation. *)
-
-let REVERSE_NIL, REVERSE_CONS = CONJ_PAIR REVERSE_HORN;;
-
-take 10 (solve (PROLOG_SLV NO_CONV [REVERSE_HORN; APPEND_HORN])
-               `??ys. REVERSE [1;2;3] = ys`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV
-                           ([REVERSE_MIXED_HORN; REVERSE_NIL; APPEND_HORN]))
-               `??ys. REVERSE [1;2;3] = ys`);;
 
 (* ------------------------------------------------------------------------- *)
 (* Filter.                                                                   *)

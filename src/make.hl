@@ -1,6 +1,8 @@
 loadt "streams.hl";;
 loadt "tunify.hl";;
 loadt "solvers.hl";;
+loadt "solvers_test.hl";;
 loadt "list_solvers.hl";;
+loadt "list_solvers_test.hl";;
 loadt "sexp.hl";;
 loadt "lisp.hl";;

@@ -231,3 +231,58 @@ take 10 (lispeval
             '((lambda (x) (list x (list (quote quote) x)))
               (quote (lambda (x) (list x (list (quote quote) x)))))
             ret`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Automatic quine generation.                                               *)
+(* ------------------------------------------------------------------------- *)
+
+let STRING_RULES,STRING_INDUCT,STRING_CASES = new_inductive_definition
+  `STRING "list" /\
+   STRING "quote" /\
+   STRING "x" /\
+   STRING "y"`;;
+
+take 5 (solve(PROLOG_SLV NO_CONV [STRING_RULES]) `??s. STRING s`);;
+
+let LISTOF_RULES,LISTOF_INDUCT,LISTOF_CASES = new_inductive_definition
+  `LISTOF P [] /\
+   (!h:A t. P h /\ LISTOF P t ==> LISTOF P (CONS h t))`;;
+
+let LISTOF_STRING_RULES =
+  ISPEC `STRING` LISTOF_RULES;;
+
+take 10 (solve (PROLOG_SLV NO_CONV [STRING_RULES; LISTOF_STRING_RULES])
+               `??l. LISTOF STRING l`);;
+
+let LISPTERM_RULES,LISPTERM_INDUCT,LISPTERM_CASES = new_inductive_definition
+  `(!s. STRING s ==> LISPTERM (Symbol s)) /\
+   (!l. LISTOF LISPTERM l ==> LISPTERM (List l)) /\
+   (!vars vars' body.
+      LISTOF STRING vars /\ vars' IS MAP Symbol vars /\ LISPTERM body
+      ==> LISPTERM (List [Symbol "lambda"; List vars'; body]))`;;
+
+(*
+let [hp] = hyp LISPTERM_RULES;;
+g hp;;
+GEN_TAC THEN
+FIX_TAC "[P]"
+REPEAT STRIP_TAC THEN
+MESON_TAC[
+*)
+
+let EVAL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL])
+  [MATCHSYMB_RULES; MATCHTAGGED_RULES;
+   REWRITE_RULE[FORALL_AND_THM] LISTREL_RULES;
+   RELASSOC_RULES; ZIPPED_RULES; MATCHPROC_RULES; MATCHBETA_RULES;
+   EVAL_RULES; BOOL_EQ_CLAUSES; EQ_REFL;
+   LISPTERM_RULES; LISTOF_STRING_RULES; STRING_RULES];;
+let lispeval = solve EVAL_SLV;;
+
+(*
+take 10 (lispeval `??tm. LISPTERM tm`);;
+
+CONJ_SLV (dest_mgoal `??ret. LISPTERM ret /\ EVAL [] ret ret`);;
+
+(snd o get o lispeval)
+  `??ret. LISPTERM ret AND ENTAILS EVAL [] ret ret`;;
+*)
