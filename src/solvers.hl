@@ -62,14 +62,14 @@ let solve : solver -> term -> (instantiation * thm) stream =
 (* ------------------------------------------------------------------------- *)
 
 let SOLVER (f:term list -> goal -> goalstate) : solver =
-  fun mvs,gl -> try singleton (f mvs gl) with Failure _ -> empty;;
+  fun mvs,gl -> try singleton (f mvs gl) with Failure _ -> Empty;;
 
 (* ------------------------------------------------------------------------- *)
 (* Basic solvers.                                                            *)
 (* ------------------------------------------------------------------------- *)
 
 let NO_SLV : solver =
-  fun _ -> empty;;
+  fun _ -> Empty;;
 
 (* Implementation using term_unify (no type instantiation) *)
 (*
@@ -190,7 +190,7 @@ let CHANGED_SLV (slv:solver) : solver =
   fun (_,g as mg) ->
     bind (slv mg)
       (function
-         meta,[gl],_ when meta = null_meta && equals_goal gl g -> empty
+         meta,[gl],_ when meta = null_meta && equals_goal gl g -> Empty
        | gstate -> singleton gstate);;
 
 (* ------------------------------------------------------------------------- *)
@@ -313,7 +313,7 @@ let POP_ASSUM_SLV : thm_solver -> solver =
   fun tslv ->
     function
       mvs,(((_,th)::asl),w) -> tslv th (mvs,(asl,w))
-    | _ -> empty;;
+    | _ -> Empty;;
 
 let ASSUM_LIST_SLV : (thm list -> solver) -> solver =
   fun aslfun (_,(asl,_) as g) -> aslfun (map snd asl) g;;

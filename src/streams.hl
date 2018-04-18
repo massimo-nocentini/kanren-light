@@ -4,17 +4,6 @@
 
 type 'a stream = Empty | Cons of 'a * (unit -> 'a stream);;
 
-let empty : 'a stream = Empty;;
-
-let cons (x : 'a) (s : 'a stream) : 'a stream = Cons(x, fun _ -> s);;
-
-let is_empty = function Empty -> true | _ -> false;;
-
-let split (s : 'a stream) : 'a * (unit -> 'a stream) =
-  match s with
-    Empty -> failwith "Empty stream"
-  | Cons (x, s') -> (x, s');;
-
 let rec mplusf (c1: 'a stream) (c2: unit -> 'a stream) : 'a stream =
    match c1 with
      Empty -> c2 ()
@@ -24,9 +13,6 @@ let rec concatf (c1: 'a stream) (c2: unit -> 'a stream) : 'a stream =
   match c1 with
     Empty -> c2 ()
   | Cons (x, f) -> Cons (x, fun _ -> concatf (f ()) c2);;
-
-let rec concat (c1: 'a stream) (c2: 'a stream) : 'a stream =
-  concatf c1 (fun _ -> c2);;
 
 let rec bind (c : 'a stream) (g : 'a -> 'b stream) : 'b stream =
   match c with
@@ -63,7 +49,33 @@ let rec stream_mapfilter (f : 'a -> 'b) (s : 'a stream) : 'b stream =
 
 let singleton (x : 'a) : 'a stream = Cons(x, fun _ -> Empty);;
 
+(* ------------------------------------------------------------------------- *)
+(* Further helping functions.                                                *)
+(* ------------------------------------------------------------------------- *)
+
+(*
+let empty : 'a stream = Empty;;
+
+let cons (x : 'a) (s : 'a stream) : 'a stream = Cons(x, fun _ -> s);;
+
+let is_empty = function Empty -> true | _ -> false;;
+
+let split (s : 'a stream) : 'a * (unit -> 'a stream) =
+  match s with
+    Empty -> failwith "Empty stream"
+  | Cons (x, s') -> (x, s');;
+
+let rec concat (c1: 'a stream) (c2: 'a stream) : 'a stream =
+  concatf c1 (fun _ -> c2);;
+*)
+
+(* ------------------------------------------------------------------------- *)
+(* Examples.                                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+(*
 let rec const (x : 'a) : 'a stream = Cons(x, fun _ -> const x);;
+*)
 
 let rec nats n = Cons(n, fun _ -> nats (n+1));;
 
