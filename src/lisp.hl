@@ -61,18 +61,24 @@ let MATCHBETA_RULES,MATCHBETA_INDUCT,MATCHBETA_CASES = new_inductive_definition
 (* Evaluation.                                                               *)
 (* ------------------------------------------------------------------------- *)
 
-let EVAL_RULES_OLD,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
-    `(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
-     (!env env' sexp vars body args args' ret.
-         MATCHBETA sexp vars body args /\ ALL2 (EVAL env) args args' /\
-         ZIPPED args' vars env' /\ EVAL (APPEND env' env) body ret
-         ==> EVAL env sexp ret) /\
-     (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL env) l l'
-                      ==> EVAL env sexp (List l')) /\
-     (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
-                        ==> EVAL env sexp quoted)`;;
+let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
+  `(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
+   (!env env' env'' fn fn' vars body args args' ret.
+       EVAL env fn fn' /\ MATCHPROC fn' vars body /\
+       ALL2 (EVAL env) args args' /\
+       ZIPPED args' vars env' /\
+       env'' IS APPEND env' env /\
+       EVAL env'' body ret
+       ==> EVAL env (List (CONS fn args)) ret) /\
+   (!env rest. EVAL env (List (CONS (Symbol "lambda") rest))
+                       (List (CONS (Symbol "lambda") rest))) /\
+   (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL env) l l'
+                    ==> EVAL env sexp (List l')) /\
+   (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
+                      ==> EVAL env sexp quoted)`;;
 
-let [EVAL_SYMB; EVAL_BETA; EVAL_LIST; EVAL_QUOTED] = CONJUNCTS EVAL_RULES_OLD;;
+let [EVAL_SYMB; EVAL_APP; EVAL_LAMBDA; EVAL_LIST; EVAL_QUOTED] =
+  CONJUNCTS EVAL_RULES;;
 
 (* ------------------------------------------------------------------------- *)
 (* The classical quine in scheme.  Note that our evaluation do not use       *)
@@ -125,23 +131,8 @@ let QUINE = prove
   MATCH_MP_TAC EVAL_SYMB THEN MATCH_ACCEPT_TAC RELASSOC_HEAD);;
 *)
 
-let EVAL_RULES = prove
- (`(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
-   (!env env' env'' sexp vars body args args' ret.
-       MATCHBETA sexp vars body args /\ ALL2 (EVAL env) args args' /\
-       ZIPPED args' vars env' /\ env'' IS APPEND env' env /\
-       EVAL env'' body ret
-       ==> EVAL env sexp ret) /\
-   (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL env) l l'
-                    ==> EVAL env sexp (List l')) /\
-   (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
-                        ==> EVAL env sexp quoted)`,
-  REWRITE_TAC[EVAL_RULES_OLD; IS_DEF] THEN MESON_TAC[EVAL_RULES_OLD]);;
-
-let [EVAL_SYMB; EVAL_BETA; EVAL_LIST; EVAL_QUOTED] = CONJUNCTS EVAL_RULES;;
-
 (* ------------------------------------------------------------------------- *)
-(* Prolog-style program for the evaluation of lisp programs.                 *)
+(* Prolog-style program for the evaluation of lisp expressions.              *)
 (* ------------------------------------------------------------------------- *)
 
 let BOOL_EQ_CLAUSES = ITAUT `~(T = F) /\ ~(F = T)`;;
