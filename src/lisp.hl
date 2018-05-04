@@ -6,21 +6,14 @@
 (* Misc list helper theory.                                                  *)
 (* ------------------------------------------------------------------------- *)
 
-(* Non serve, basta ALL2 *)
-let LISTREL_RULES,LISTREL_INDUCT,LISTREL_CASES = new_inductive_definition
-  `LISTREL R [] [] /\
-   (!h h':A t t'. R h h' /\ LISTREL R t t'
-                  ==> LISTREL R (CONS h t) (CONS h' t'))`;;
+let ALL2_RULES = prove
+ (`(!R:A->B->bool. ALL2 R [] []) /\
+   (!R h:A h':B t t'. R h h' /\ ALL2 R t t'
+                      ==> ALL2 R (CONS h t) (CONS h' t'))`,
+  REWRITE_TAC[ALL2]);;
 
-let LISTREL_NIL,LISTREL_CONS =
-  CONJ_PAIR (REWRITE_RULE [FORALL_AND_THM] LISTREL_RULES);;
-
-let LISTREL_MONO = prove
-  (`!R R' l m. (!x:A y:B. R x y ==> R' x y) /\ LISTREL R l m
-               ==> LISTREL R' l m`,
-   REWRITE_TAC[IMP_CONJ; RIGHT_FORALL_IMP_THM] THEN REPEAT GEN_TAC THEN
-   DISCH_TAC THEN MATCH_MP_TAC LISTREL_INDUCT THEN
-   ASM_MESON_TAC[LISTREL_RULES]);;
+let ALL2_NIL,ALL2_CONS =
+  CONJ_PAIR (REWRITE_RULE [FORALL_AND_THM] ALL2_RULES);;
 
 (* Rev-Assoc relation. *)
 let RELASSOC_RULES,RELASSOC_INDUCT,RELASSOC_CASES = new_inductive_definition
@@ -46,7 +39,7 @@ let ZIPPED_NIL,ZIPPED_CONS = CONJ_PAIR ZIPPED_RULES;;
 let MATCHPROC_RULES,MATCHPROC_INDUCT,MATCHPROC_CASES = new_inductive_definition
   `!sexp vlist vars body.
      MATCHTAGGED "lambda" sexp [List vlist; body] /\
-     LISTREL MATCHSYMB vlist vars
+     ALL2 MATCHSYMB vlist vars
      ==> MATCHPROC sexp vars body`;;
 
 let _ = prove
@@ -54,10 +47,10 @@ let _ = prove
   GEN_REWRITE_TAC I [MATCHPROC_CASES] THEN
   EXISTS_TAC `[Symbol "x"; Symbol "y"]` THEN
   CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
-  MATCH_MP_TAC LISTREL_CONS THEN
+  MATCH_MP_TAC ALL2_CONS THEN
   CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHSYMB_RULES; ALL_TAC] THEN
-  MATCH_MP_TAC LISTREL_CONS THEN CONJ_TAC THENL
-  [MATCH_ACCEPT_TAC MATCHSYMB_RULES; MATCH_ACCEPT_TAC LISTREL_NIL]);;
+  MATCH_MP_TAC ALL2_CONS THEN CONJ_TAC THENL
+  [MATCH_ACCEPT_TAC MATCHSYMB_RULES; MATCH_ACCEPT_TAC ALL2_NIL]);;
 
 let MATCHBETA_RULES,MATCHBETA_INDUCT,MATCHBETA_CASES = new_inductive_definition
   `!fn vars args body.
@@ -68,23 +61,16 @@ let MATCHBETA_RULES,MATCHBETA_INDUCT,MATCHBETA_CASES = new_inductive_definition
 (* Evaluation.                                                               *)
 (* ------------------------------------------------------------------------- *)
 
-let EVAL_RULES_OLD,EVAL_INDUCT,EVAL_CASES =
-  let EVAL_RULES',EVAL_INDUCT',EVAL_CASES' = new_inductive_definition
+let EVAL_RULES_OLD,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
     `(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
      (!env env' sexp vars body args args' ret.
-         MATCHBETA sexp vars body args /\ LISTREL (EVAL env) args args' /\
+         MATCHBETA sexp vars body args /\ ALL2 (EVAL env) args args' /\
          ZIPPED args' vars env' /\ EVAL (APPEND env' env) body ret
          ==> EVAL env sexp ret) /\
-     (!env sexp l l'. MATCHTAGGED "list" sexp l /\ LISTREL (EVAL env) l l'
+     (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL env) l l'
                       ==> EVAL env sexp (List l')) /\
      (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
-                        ==> EVAL env sexp quoted)` in
-  let pth = prove
-   (hd (hyp EVAL_RULES'),
-    MESON_TAC[injectivity "sexp"; LISTREL_MONO]) in
-  PROVE_HYP pth EVAL_RULES',
-  PROVE_HYP pth EVAL_INDUCT',
-  PROVE_HYP pth EVAL_CASES';;
+                        ==> EVAL env sexp quoted)`;;
 
 let [EVAL_SYMB; EVAL_BETA; EVAL_LIST; EVAL_QUOTED] = CONJUNCTS EVAL_RULES_OLD;;
 
@@ -115,11 +101,11 @@ let QUINE = prove
   [MATCH_MP_TAC MATCHBETA_RULES THEN MATCH_MP_TAC MATCHPROC_RULES THEN
    EXISTS_TAC `[Symbol "x"]` THEN
    CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
-   MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL; MATCHSYMB_RULES];
+   MATCH_MP_TAC ALL2_CONS THEN REWRITE_TAC[ALL2_NIL; MATCHSYMB_RULES];
    ALL_TAC] THEN
   EXISTS_TAC `['(lambda (x) (list x (list (quote quote) x)))]` THEN
   CONJ_TAC THENL
-  [MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
+  [MATCH_MP_TAC ALL2_CONS THEN REWRITE_TAC[ALL2_NIL] THEN
    MATCH_MP_TAC EVAL_QUOTED THEN MATCH_ACCEPT_TAC MATCHTAGGED_RULES;
    ALL_TAC] THEN
   CONJ_TAC THENL
@@ -127,26 +113,26 @@ let QUINE = prove
   MATCH_MP_TAC EVAL_LIST THEN
   EXISTS_TAC `[Symbol "x"; '(list (quote quote) x)]` THEN
   CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
-  MATCH_MP_TAC LISTREL_CONS THEN CONJ_TAC THENL
+  MATCH_MP_TAC ALL2_CONS THEN CONJ_TAC THENL
   [MATCH_MP_TAC EVAL_SYMB THEN MATCH_ACCEPT_TAC RELASSOC_HEAD; ALL_TAC] THEN
-  MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
+  MATCH_MP_TAC ALL2_CONS THEN REWRITE_TAC[ALL2_NIL] THEN
   MATCH_MP_TAC EVAL_LIST THEN EXISTS_TAC `['(quote quote); Symbol "x"]` THEN
   CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
-  MATCH_MP_TAC LISTREL_CONS THEN CONJ_TAC THENL
+  MATCH_MP_TAC ALL2_CONS THEN CONJ_TAC THENL
   [MATCH_MP_TAC EVAL_QUOTED THEN MATCH_ACCEPT_TAC MATCHTAGGED_RULES;
    ALL_TAC] THEN
-  MATCH_MP_TAC LISTREL_CONS THEN REWRITE_TAC[LISTREL_NIL] THEN
+  MATCH_MP_TAC ALL2_CONS THEN REWRITE_TAC[ALL2_NIL] THEN
   MATCH_MP_TAC EVAL_SYMB THEN MATCH_ACCEPT_TAC RELASSOC_HEAD);;
 *)
 
 let EVAL_RULES = prove
  (`(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
    (!env env' env'' sexp vars body args args' ret.
-       MATCHBETA sexp vars body args /\ LISTREL (EVAL env) args args' /\
+       MATCHBETA sexp vars body args /\ ALL2 (EVAL env) args args' /\
        ZIPPED args' vars env' /\ env'' IS APPEND env' env /\
        EVAL env'' body ret
        ==> EVAL env sexp ret) /\
-   (!env sexp l l'. MATCHTAGGED "list" sexp l /\ LISTREL (EVAL env) l l'
+   (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL env) l l'
                     ==> EVAL env sexp (List l')) /\
    (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
                         ==> EVAL env sexp quoted)`,
@@ -166,8 +152,7 @@ let APPEND_RULES = prove
   REWRITE_TAC[APPEND; CONS_11]);;
 
 let EVAL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL])
-  [MATCHSYMB_RULES; MATCHTAGGED_RULES;
-   REWRITE_RULE[FORALL_AND_THM] LISTREL_RULES;
+  [MATCHSYMB_RULES; MATCHTAGGED_RULES; ALL2_RULES;
    RELASSOC_RULES; ZIPPED_RULES; MATCHPROC_RULES; MATCHBETA_RULES;
    EVAL_RULES; BOOL_EQ_CLAUSES; EQ_REFL];;
 let lispeval = solve EVAL_SLV;;
@@ -188,13 +173,13 @@ take 10 (lispeval `??s ret. MATCHTAGGED s '(tag x y) ret`);;
 take 10 (lispeval `??ret. MATCHTAGGED "tag" '(tag x y) ret`);;
 take 10 (lispeval `??ret. MATCHTAGGED "list" '(tag x y) ret`);;
 
-(* Test LISTREL *)
+(* Test ALL2 *)
 take 10 (lispeval `??a. a = 1`);;
-take 10 (lispeval `??a. LISTREL (=) [] a`);;
-take 10 (lispeval `??a. LISTREL (=) a []`);;
-take 10 (lispeval `??a. LISTREL (=) [1] [a]`);;
-take 10 (lispeval `??a. LISTREL (=) [1] a`);;
-take 3 (lispeval `??a b. LISTREL (=) a b`);;
+take 10 (lispeval `??a. ALL2 (=) [] a`);;
+take 10 (lispeval `??a. ALL2 (=) a []`);;
+take 10 (lispeval `??a. ALL2 (=) [1] [a]`);;
+take 10 (lispeval `??a. ALL2 (=) [1] a`);;
+take 3 (lispeval `??a b. ALL2 (=) a b`);;
 
 (* Test RELASSOC *)
 take 10 (lispeval `??k ret. RELASSOC k [0,T; 1,F] ret`);;
@@ -272,7 +257,7 @@ MESON_TAC[
 
 let EVAL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL])
   [MATCHSYMB_RULES; MATCHTAGGED_RULES;
-   REWRITE_RULE[FORALL_AND_THM] LISTREL_RULES;
+   REWRITE_RULE[FORALL_AND_THM] ALL2_RULES;
    RELASSOC_RULES; ZIPPED_RULES; MATCHPROC_RULES; MATCHBETA_RULES;
    EVAL_RULES; BOOL_EQ_CLAUSES; EQ_REFL;
    LISPTERM_RULES; LISTOF_STRING_RULES; STRING_RULES];;

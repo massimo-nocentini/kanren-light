@@ -6,15 +6,6 @@
 (* Misc list helper theory.                                                  *)
 (* ------------------------------------------------------------------------- *)
 
-let ALL2_RULES = prove
- (`(!R:A->B->bool. ALL2 R [] []) /\
-   (!R h:A h':B t t'. R h h' /\ ALL2 R t t'
-                      ==> ALL2 R (CONS h t) (CONS h' t'))`,
-  REWRITE_TAC[ALL2]);;
-
-let ALL2_NIL,ALL2_CONS =
-  CONJ_PAIR (REWRITE_RULE [FORALL_AND_THM] ALL2_RULES);;
-
 (* ------------------------------------------------------------------------- *)
 (* Evaluation.                                                               *)
 (* ------------------------------------------------------------------------- *)
@@ -53,7 +44,6 @@ let [EVL_SYMB; EVL_APP; EVL_LAMBDA; EVL_LIST; EVL_QUOTED] = CONJUNCTS EVL_RULES;
 
 let EVL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL])
   [MATCHSYMB_RULES; MATCHTAGGED_RULES; ALL2_RULES;
-   REWRITE_RULE[FORALL_AND_THM] LISTREL_RULES;
    RELASSOC_RULES; ZIPPED_RULES; MATCHPROC_RULES; MATCHBETA_RULES;
    EVL_RULES; BOOL_EQ_CLAUSES; EQ_REFL];;
 let lispeval = solve EVL_SLV;;
