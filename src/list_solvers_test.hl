@@ -128,3 +128,15 @@ take 10 (solve (PROLOG_SLV NO_CONV
                `??ys. REVERSE [1;2;3] = ys`);;
 
 print_endline "Fine test: prolog reverse";;
+
+(* ------------------------------------------------------------------------- *)
+(* Test quicksort.                                                           *)
+(* ------------------------------------------------------------------------- *)
+
+print_endline "Inizio test: Test quicksort";;
+
+let s = quicksort_solver `??ys. SORT (<=) [12;3;3;23;7;9;12] (CONS 3 ys)` in
+let ret = concl(hd(map snd (take 10 s))) in
+assert (ret = `SORT (<=) [12; 3; 3; 23; 7; 9; 12] [3; 3; 7; 9; 12; 12; 23]`);;
+
+print_endline "Fine test: Test quicksort";;

@@ -348,6 +348,8 @@ let PROLOG_SLV conv thl : solver =
 (* Tests and examples.                                                       *)
 (* ------------------------------------------------------------------------- *)
 
+print_endline "Inizio interazione.";;
+
 let sols = take 10
   (solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV))
          `??a b:A.
@@ -384,6 +386,8 @@ map (concl o snd) sols;;
       (!x y. padre x y ==> antenato x y) &&
       padre pippo pluto && padre pluto paperino
       ?- antenato a b`;;
+
+print_endline "Fine interazione.";;
 
 (* ------------------------------------------------------------------------- *)
 (* Esempio di un caso in cui con le eccezioni non si troverebbe nessuna      *)

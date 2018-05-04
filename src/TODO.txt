@@ -1,0 +1,6 @@
+- Correggere il printer del sexp che emette '(
+- Eliminare ogni occorrenza di LISTREL, rimpiazzare con ALL2
+- Eliminare lisp.hl quando lisp2.hl è completo e autosufficiente.
+- Generazione del quine.
+- Test?
+- Macchine di turing.
