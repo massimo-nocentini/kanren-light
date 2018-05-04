@@ -137,10 +137,10 @@ let rec pmk_sexp =
 (* ------------------------------------------------------------------------- *)
 
 let pp_sexp_printer fmt tm =
-  let l = list_dest_sexp tm in
+  let l = map dest_sexp (list_dest_sexp tm) in
   pp_print_string fmt "'(";
   pp_open_box fmt 0;
-  pp_print_sexps fmt (map dest_sexp l);
+  pp_print_sexps fmt l;
   pp_close_box fmt ();
   pp_print_string fmt ")";;
 
