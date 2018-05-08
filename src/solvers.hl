@@ -322,14 +322,21 @@ parse_as_infix("IS",(10,"right"));;
 let IS_DEF = new_definition
   `(IS) = (=):A->A->bool`;;
 
+(*
 let IS_SLV : conv -> solver =
   fun conv ->
     let conv' = RAND_CONV conv THENC REWRITE_CONV[IS_DEF] in
     THEN_SLV (TACTIC_SLV (CONV_TAC conv')) REFL_SLV;;
+*)
 
-(* ------------------------------------------------------------------------- *)
-(* FIXME: The conversion strategy for IS_SLV is hard coded!                  *)
-(* ------------------------------------------------------------------------- *)
+let IS_SLV : conv -> solver =
+  let IS_TAC : conv -> tactic =
+    let is_is = is_binary "IS" in
+    let is_thm = prove(`!x y:A. x IS y <=> x = y`, REWRITE_TAC[IS_DEF]) in
+    fun conv (_,w) as g ->
+      if not (is_is w) then failwith "IS_TAC" else
+      (CONV_TAC (RAND_CONV conv) THEN GEN_REWRITE_TAC I [is_thm]) g in
+  fun conv -> THEN_SLV (TACTIC_SLV (IS_TAC conv)) REFL_SLV;;
 
 let PROLOG_SLV conv thl : solver =
   let RAW_PROLOG_SLV thl : solver =
