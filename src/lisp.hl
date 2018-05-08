@@ -213,10 +213,8 @@ take 10 (lispeval
 (* ------------------------------------------------------------------------- *)
 
 let STRING_RULES,STRING_INDUCT,STRING_CASES = new_inductive_definition
-  `STRING "list" /\
-   STRING "quote" /\
-   STRING "x" /\
-   STRING "y"`;;
+  `STRING "quote" /\
+   STRING "x"`;;
 
 take 5 (solve(PROLOG_SLV NO_CONV [STRING_RULES]) `??s. STRING s`);;
 
@@ -227,38 +225,104 @@ let LISTOF_RULES,LISTOF_INDUCT,LISTOF_CASES = new_inductive_definition
 let LISTOF_STRING_RULES =
   ISPEC `STRING` LISTOF_RULES;;
 
-take 10 (solve (PROLOG_SLV NO_CONV [STRING_RULES; LISTOF_STRING_RULES])
-               `??l. LISTOF STRING l`);;
+map snd (take 20 (solve (PROLOG_SLV NO_CONV [STRING_RULES; LISTOF_STRING_RULES])
+               `??l. LISTOF STRING l`));;
 
-let LISPTERM_RULES,LISPTERM_INDUCT,LISPTERM_CASES = new_inductive_definition
+let LISPTERM_RULES',LISPTERM_INDUCT',LISPTERM_CASES' = new_inductive_definition
   `(!s. STRING s ==> LISPTERM (Symbol s)) /\
    (!l. LISTOF LISPTERM l ==> LISPTERM (List l)) /\
+   (!l. LISTOF LISPTERM l ==> LISPTERM (List (CONS (Symbol "list") l))) /\
    (!vars vars' body.
       LISTOF STRING vars /\ vars' IS MAP Symbol vars /\ LISPTERM body
       ==> LISPTERM (List [Symbol "lambda"; List vars'; body]))`;;
 
-(*
-let [hp] = hyp LISPTERM_RULES;;
+let [hp] = hyp LISPTERM_RULES';;
 g hp;;
-GEN_TAC THEN
-FIX_TAC "[P]"
-REPEAT STRIP_TAC THEN
-MESON_TAC[
+e CHEAT_TAC;;
+let th = top_thm();;
+let LISPTERM_RULES = PROVE_HYP th LISPTERM_RULES';;
+let LISPTERM_INDUCT = PROVE_HYP th LISPTERM_INDUCT';;
+let LISPTERM_CASES = PROVE_HYP th LISPTERM_CASES';;
+
+let [LISPTERM_SYMBOL;LISPTERM_LIST;LISPTERM_APP;LISPTERM_LAMBDA] =
+  CONJUNCTS LISPTERM_RULES;;
+
+(*
+GEN_TAC THEN FIX_TAC "[P]" THEN REPEAT STRIP_TAC THEN
+REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC) THEN
+ASM_REWRITE_TAC[injectivity "sexp"; distinctness "sexp"; UNWIND_THM1]
+
+ STRUCT_CASES_TAC (ISPEC `l:sexp list` (cases "list")) THEN REWRITE_TAC[LISTOF_RULES; CONS_11] THEN
+  STRUCT_CASES_TAC (SPEC `a0:sexp` (CONJUNCT1 (cases "sexp"))) THEN REWRITE_TAC[injectivity "sexp"; distinctness "sexp"]
+   ASM_CASES_TAC `a = "lambda"` THEN
 *)
 
-let EVAL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL])
-  [MATCHSYMB_RULES; MATCHTAGGED_RULES;
-   REWRITE_RULE[FORALL_AND_THM] ALL2_RULES;
+
+let LISTOF_LISPTERM_RULES = ISPEC `LISPTERM` LISTOF_RULES;;
+
+let QUINE_RULES,QUINE_INDUCT,QUINE_CASES = new_inductive_definition
+  `!x y. LISPTERM x /\ LISPTERM y /\ EVAL [] (List [x; y]) (List [x; y])
+         ==> QUINE (List [x; y])`;;
+
+let EVAL_SLV = PROLOG_SLV (REWRITE_CONV[APPEND; APPEND_NIL; MAP])
+  [MATCHSYMB_RULES; MATCHTAGGED_RULES; ALL2_RULES;
    RELASSOC_RULES; ZIPPED_RULES; MATCHPROC_RULES; MATCHBETA_RULES;
-   EVAL_RULES; BOOL_EQ_CLAUSES; EQ_REFL;
-   LISPTERM_RULES; LISTOF_STRING_RULES; STRING_RULES];;
+   EVAL_RULES; BOOL_EQ_CLAUSES; EQ_REFL; STRING_RULES;
+   LISTOF_STRING_RULES; LISPTERM_RULES; LISTOF_LISPTERM_RULES; QUINE_RULES];;
 let lispeval = solve EVAL_SLV;;
 
+map snd (take 20 (solve EVAL_SLV `??l. LISTOF STRING l`));;
+map snd (take 20 (solve EVAL_SLV `??x. LISPTERM x`));;
+map snd (take 30 (solve EVAL_SLV `??x y. LISPTERM (List [x; y])`));;
+map snd (take 20 (solve EVAL_SLV `??ret. EVAL [] '(lambda () list) ret`));;
+
+map snd (take 1 (solve EVAL_SLV `LISPTERM (Symbol "x")`));;
+map snd (take 1 (solve EVAL_SLV `LISPTERM (Symbol "y")`));;
+map snd (take 1 (solve EVAL_SLV `LISPTERM '(x y)`));;
+
+map snd (take 1 (solve EVAL_SLV
+  `LISPTERM '(lambda (x) (list x (list (quote quote) x)))`));;
+
+map snd (take 1 (solve EVAL_SLV
+  `QUINE
+    '((lambda (x) (list x (list (quote quote) x)))
+      (quote (lambda (x) (list x (list (quote quote) x)))))`));;
+
+(* ------------------------------------------------------------------------- *)
+(* Ricerca del quine.  Ancora non funziona.  Vedi sotto.                     *)
+(* ------------------------------------------------------------------------- *)
+
 (*
-take 10 (lispeval `??tm. LISPTERM tm`);;
+map snd (take 1 (solve EVAL_SLV `??x. QUINE x`));;
+*)
 
-CONJ_SLV (dest_mgoal `??ret. LISPTERM ret /\ EVAL [] ret ret`);;
+(* Problema: diverge! *)
+(*
+map snd (take 2 (solve EVAL_SLV
+  `LISPTERM (List [Symbol "lambda"; '(x); Symbol "x"])`));;
 
-(snd o get o lispeval)
-  `??ret. LISPTERM ret AND ENTAILS EVAL [] ret ret`;;
+g `LISPTERM (List [Symbol "lambda"; '(x); Symbol "x"])`;;
+GEN_REWRITE_TAC I [LISPTERM_CASES]
+REWRITE_TAC[distinctness "sexp"; injectivity "sexp"; UNWIND_THM1]
+DISJ2_TAC
+REWRITE_TAC[CONS_11; NOT_CONS_NIL]
+EXISTS_TAC `["x":string]`
+EXISTS_TAC `[Symbol "x"]`
+EXISTS_TAC `Symbol "x"`
+REWRITE_TAC[IS_DEF; MAP]
+CONJ_TAC
+MATCH_MP_TAC (CONJUNCT2 (REWRITE_RULE[FORALL_AND_THM] LISTOF_RULES))
+MESON_TAC[STRING_RULES; LISTOF_STRING_RULES]
+MESON_TAC[STRING_RULES; LISPTERM_RULES]
+*)
+
+(* Anche questi! *)
+(*
+(* Problema: diverge! *)
+map snd (take 2 (solve EVAL_SLV
+  `??a b. LISPTERM (List [List [Symbol "lambda"; '(x); a]; b])`));;
+
+(* Problema: diverge! *)
+map snd (take 2 (solve EVAL_SLV
+  `??a. LISPTERM (List [Symbol "lambda"; '(x); a])`));;
 *)
