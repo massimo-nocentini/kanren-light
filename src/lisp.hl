@@ -244,7 +244,7 @@ let LISPTERM_RULES = PROVE_HYP th LISPTERM_RULES';;
 let LISPTERM_INDUCT = PROVE_HYP th LISPTERM_INDUCT';;
 let LISPTERM_CASES = PROVE_HYP th LISPTERM_CASES';;
 
-let [LISPTERM_SYMBOL;LISPTERM_LIST;LISPTERM_APP;LISPTERM_LAMBDA] =
+let [LISPTERM_SYMBOL;LISPTERM_APP;LISPTERM_LIST;LISPTERM_LAMBDA] =
   CONJUNCTS LISPTERM_RULES;;
 
 (*
@@ -296,10 +296,110 @@ map snd (take 1 (solve EVAL_SLV
 map snd (take 1 (solve EVAL_SLV `??x. QUINE x`));;
 *)
 
-(* Problema: diverge! *)
+let print_goalstate (gs:goalstate) =
+  let (_,gl,_) = gs in
+  if gl = [] then () else
+  do_list print_goal (rev gl);;
+
+let (print_mgoalstack:mgoalstack->unit) =
+  fun mgls ->
+    if mgls = [] then Format.print_string "Empty mgoalstack" else
+    let mgl = hd mgls in
+    if mgl = Empty then Format.print_string "No (more) solutions" else
+    print_goalstate (get mgl);;
+
+#install_printer print_mgoalstack;;
+
+(* Diverge! *)
 (*
 map snd (take 2 (solve EVAL_SLV
   `LISPTERM (List [Symbol "lambda"; '(x); Symbol "x"])`));;
+*)
+
+gg `LISPTERM (List [Symbol "lambda"; '(x); Symbol "x"])`;;
+ee (THEN_SLV (APPLY_SLV LISPTERM_LAMBDA) CONJ_SLV);;
+ee (THENL_SLV
+    (THEN_SLV (APPLY_SLV (CONJUNCT2 LISTOF_STRING_RULES)) CONJ_SLV)
+    [APPLY_SLV (CONJUNCT2 STRING_RULES);
+     APPLY_SLV (CONJUNCT1 LISTOF_STRING_RULES)]);;
+ee CONJ_SLV;;
+ee (IS_SLV (REWRITE_CONV[MAP]));;
+ee (APPLY_SLV LISPTERM_SYMBOL);;
+ee (APPLY_SLV (CONJUNCT2 STRING_RULES));;
+top_thm1();;
+
+gg `LISPTERM (List [Symbol "lambda"; '(x); Symbol "x"])`;;
+ee (THEN_SLV (APPLY_SLV LISPTERM_LAMBDA) CONJ_SLV);;
+ee (THEN_SLV (APPLY_SLV (CONJUNCT2 LISTOF_STRING_RULES)) CONJ_SLV);;
+ee (APPLY_SLV (CONJUNCT2 STRING_RULES));;
+ee (APPLY_SLV (CONJUNCT1 LISTOF_STRING_RULES));;
+ee EVAL_SLV;;
+top_thm1();;
+
+let STRING_SLV =
+  MAP_COLLECT_SLV APPLY_SLV (CONJUNCTS STRING_RULES);;
+
+gg `??x. STRING x`;;
+ee STRING_SLV;;
+take 10 (top_thms());;
+
+let rec LISTOF_STRING_SLV : solver =
+  fun mg ->
+    CONCAT_SLV
+      (APPLY_SLV (CONJUNCT1 LISTOF_STRING_RULES))
+      (THENL_SLV
+        (THEN_SLV (APPLY_SLV (CONJUNCT2 LISTOF_STRING_RULES)) CONJ_SLV)
+        [STRING_SLV; LISTOF_STRING_SLV])
+    mg;;
+
+gg `??x. LISTOF STRING x`;;
+ee LISTOF_STRING_SLV;;
+let l = top_thms();;
+
+let rec LISPTERM_SLV : solver =
+  fun mg ->
+    INTERLEAVE_SLV
+      [THEN_SLV (APPLY_SLV LISPTERM_SYMBOL) STRING_SLV;
+       THEN_SLV (APPLY_SLV LISPTERM_APP) LISTOF_LISPTERM_SLV;
+       THEN_SLV (APPLY_SLV LISPTERM_LIST) LISTOF_LISPTERM_SLV;
+       LISPTERM_LAMBDA_SLV
+      ]
+    mg
+and LISPTERM_LAMBDA_SLV : solver =
+  fun mg ->
+    THENL_SLV (THEN_SLV (APPLY_SLV LISPTERM_LAMBDA) (REPEAT_SLV CONJ_SLV))
+      [LISTOF_STRING_SLV;
+       IS_SLV (REWRITE_CONV [MAP]);
+       LISPTERM_SLV]
+      mg
+and LISTOF_LISPTERM_SLV : solver =
+  fun mg ->
+    CONCAT_SLV
+      (APPLY_SLV (CONJUNCT1 LISTOF_LISPTERM_RULES))
+      (THENL_SLV
+        (THEN_SLV (APPLY_SLV (CONJUNCT2 LISTOF_LISPTERM_RULES)) CONJ_SLV)
+        [LISPTERM_SLV; LISTOF_LISPTERM_SLV])
+    mg;;
+
+(* Diverge con take 10!! *)
+gg `??x. LISPTERM x`;;
+ee LISPTERM_SLV;;
+let l = top_thms();;
+take 9 l;;
+
+gg `??x. LISPTERM x`;;
+ee (APPLY_SLV LISPTERM_LAMBDA);;
+ee (REPEAT_SLV CONJ_SLV);;
+ee (APPLY_SLV (CONJUNCT2 LISTOF_STRING_RULES));;
+ee CONJ_SLV;;
+ee STRING_SLV;;
+ee LISTOF_STRING_SLV;;
+ee (IS_SLV (REWRITE_CONV [MAP]));;
+ee LISPTERM_SLV;;
+top_thm1();;
+
+(* Problema: diverge! *)
+(*
 
 g `LISPTERM (List [Symbol "lambda"; '(x); Symbol "x"])`;;
 GEN_REWRITE_TAC I [LISPTERM_CASES]

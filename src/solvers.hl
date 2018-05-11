@@ -286,6 +286,10 @@ let top_thm1() : thm =
   let ((mvs,i),[],f) = get s in 
   f i [];;
 
+let top_thms() : thm stream =
+  let s::_ = !current_mgoalstack in
+  stream_map (fun ((mvs,i),[],f) -> f i [])  s;;
+
 (*
 gg `??X. 2 + X = 4`;;
 ee (TACTIC_SLV (REWRITE_TAC[ARITH_RULE `4 = 2 + 2`]));;
