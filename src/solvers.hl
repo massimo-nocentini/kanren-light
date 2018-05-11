@@ -213,6 +213,87 @@ let THEN_SLV,THENL_SLV =
   THEN_SLV,THENL_SLV;;
 
 (* ------------------------------------------------------------------------- *)
+(* Interactive usage of solvers.                                             *)
+(* ------------------------------------------------------------------------- *)
+
+type mgoalstate = goalstate stream;;
+
+type mgoalstack = mgoalstate list;;
+
+let current_mgoalstack : mgoalstack ref = ref [];;
+
+let (mk_mgoalstate:mgoal->mgoalstate) =
+  let just inst [th] = INSTANTIATE_ALL inst th in
+  fun (mvs,(asl,w)) ->
+    if type_of w = bool_ty then
+      singleton((mvs,null_inst),[asl,w],just)
+    else failwith "mk_mgoalstate: Non-boolean goal";;
+
+let set_mgoal : mgoal -> mgoalstack =
+  fun mgl ->
+    current_mgoalstack := [mk_mgoalstate mgl];
+    !current_mgoalstack;;
+
+let gg tm =
+  set_mgoal(dest_mgoal tm);;
+
+let pp () : mgoalstack =
+  !current_mgoalstack;;
+
+let bb () : mgoalstack =
+  if !current_mgoalstack = [] then failwith "No mgoal set." else
+  current_mgoalstack := tl (!current_mgoalstack);
+  !current_mgoalstack;;
+
+let (mrefine:(mgoalstate->mgoalstate)->mgoalstack) =
+  fun r ->
+    let l = !current_mgoalstack in
+    if l = [] then failwith "No current mgoal" else
+    let h = hd l in
+    let res = r h :: l in
+    current_mgoalstack := res;
+    !current_mgoalstack;;
+
+let (mby:solver->(mgoalstate->mgoalstate)) =
+  fun slv mgstate ->
+    bind mgstate
+      (fun ((mvs,inst),gls,just) ->
+        if gls = [] then failwith "No goal set" else
+        let g = hd gls
+        and ogls = tl gls in
+        stream_map
+          (fun ((newmvs,newinst),subgls,subjust) ->
+            let n = length subgls in
+            let mvs' = union newmvs mvs
+            and inst' = compose_insts inst newinst
+            and gls' = subgls @ map (inst_goal newinst) ogls in
+            let just' i ths =
+              let i' = compose_insts inst' i in
+              let cths,oths = chop_list n ths in
+              let sths = (subjust i cths) :: oths in
+              just i' sths in
+            (mvs',inst'),gls',just')
+          (slv (mvs,g)));;
+ 
+(* MVALID ? *)
+(*  let e tac = refine(by(VALID tac));; *)
+
+let ee (slv:solver) : mgoalstack =
+  mrefine(mby slv);;
+
+let top_thm1() : thm =
+  let s::_ = !current_mgoalstack in
+  let ((mvs,i),[],f) = get s in 
+  f i [];;
+
+(*
+gg `??X. 2 + X = 4`;;
+ee (TACTIC_SLV (REWRITE_TAC[ARITH_RULE `4 = 2 + 2`]));;
+ee REFL_SLV;;
+top_thm1();;
+*)
+
+(* ------------------------------------------------------------------------- *)
 (* Sequential chains of solvers.                                             *)
 (* ------------------------------------------------------------------------- *)
 
