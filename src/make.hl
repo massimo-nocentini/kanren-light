@@ -5,4 +5,4 @@ loadt "solvers_test.hl";;
 loadt "list_solvers.hl";;
 loadt "list_solvers_test.hl";;
 loadt "sexp.hl";;
-loadt "lisp.hl";;
+(* loadt "lisp.hl";; *)

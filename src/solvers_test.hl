@@ -43,3 +43,14 @@ let [i,th] =
   assert (concl th = `0 MOD b = 0`);;
 
 print_endline "Fine test: THEN_SLV";;
+
+(* ------------------------------------------------------------------------- *)
+(* Metas.                                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+gg `??x. x + 1 = 2 /\ x = 1`;;
+ee CONJ_SLV;;
+ee (META_EXISTS_SLV `x:num` [] `1`);;
+ee (TACTIC_SLV ARITH_TAC);;
+ee REFL_SLV;;
+assert (concl(top_thm1()) = `1 + 1 = 2 /\ 1 = 1`);;
