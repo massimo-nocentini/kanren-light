@@ -1,0 +1,178 @@
+(* ========================================================================= *)
+(* Lispish meta-circular evaluator.                                          *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Misc list helper theory.                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let ALL2_RULES = prove
+ (`(!R:A->B->bool. ALL2 R [] []) /\
+   (!R h:A h':B t t'. R h h' /\ ALL2 R t t'
+                      ==> ALL2 R (CONS h t) (CONS h' t'))`,
+  REWRITE_TAC[ALL2]);;
+
+let ALL2_NIL,ALL2_CONS =
+  CONJ_PAIR (REWRITE_RULE [FORALL_AND_THM] ALL2_RULES);;
+
+(* Rev-Assoc relation. *)
+let RELASSOC_RULES,RELASSOC_INDUCT,RELASSOC_CASES = new_inductive_definition
+  `(!k:A v:B l. RELASSOC k (CONS (v,k) l) v) /\
+   (!k k' v v' l. ~(k = k') /\ RELASSOC k l v'
+                  ==> RELASSOC k (CONS (v,k') l) v')`;;
+
+let RELASSOC_HEAD,REALASSOC_TAIL = CONJ_PAIR RELASSOC_RULES;;
+
+(* Zip-relation. *)
+let ZIPPED_RULES,ZIPPED_INDUCT,ZIPPED_CASES = new_inductive_definition
+  `ZIPPED [] [] [] /\
+   (!x xs y ys zs. ZIPPED xs ys zs
+                   ==> ZIPPED (CONS x xs) (CONS y ys) (CONS (x,y) zs))`;;
+
+let ZIPPED_NIL,ZIPPED_CONS = CONJ_PAIR ZIPPED_RULES;;
+
+(* ------------------------------------------------------------------------- *)
+(* Helpers for sexp analyis.                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+(* Matcher for lisp-like lambda forms. *)
+let MATCHPROC_RULES,MATCHPROC_INDUCT,MATCHPROC_CASES = new_inductive_definition
+  `!sexp vlist vars body.
+     MATCHTAGGED "lambda" sexp [List vlist; body] /\
+     ALL2 MATCHSYMB vlist vars
+     ==> MATCHPROC sexp vars body`;;
+
+let MATCHPROC1_RULES,MATCHPROC1_INDUCT,MATCHPROC1_CASES =
+  new_inductive_definition
+  `!sexp var body.
+     MATCHTAGGED "lambda" sexp [List [Symbol var]; body]
+     ==> MATCHPROC1 sexp var body`;;
+
+let _ = prove
+ (`MATCHPROC '(lambda (x y) (p x y)) ["x"; "y"] '(p x y)`,
+  GEN_REWRITE_TAC I [MATCHPROC_CASES] THEN
+  EXISTS_TAC `[Symbol "x"; Symbol "y"]` THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHTAGGED_RULES; ALL_TAC] THEN
+  MATCH_MP_TAC ALL2_CONS THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC MATCHSYMB_RULES; ALL_TAC] THEN
+  MATCH_MP_TAC ALL2_CONS THEN CONJ_TAC THENL
+  [MATCH_ACCEPT_TAC MATCHSYMB_RULES; MATCH_ACCEPT_TAC ALL2_NIL]);;
+
+let MATCHBETA_RULES,MATCHBETA_INDUCT,MATCHBETA_CASES = new_inductive_definition
+  `!fn vars args body.
+      MATCHPROC fn vars body
+      ==> MATCHBETA (List (CONS fn args)) vars body args`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Evaluation.                                                               *)
+(* ------------------------------------------------------------------------- *)
+
+let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
+  `(!env a x. RELASSOC a env x ==> EVAL env (Symbol a) x) /\
+   (!env env' env'' fn fn' vars body args args' ret.
+       EVAL env fn fn' /\ MATCHPROC fn' vars body /\
+       ALL2 (EVAL env) args args' /\
+       ZIPPED args' vars env' /\
+       APPEND env' env = env'' /\
+       EVAL env'' body ret
+       ==> EVAL env (List (CONS fn args)) ret) /\
+   (!env rest. EVAL env (List (CONS (Symbol "lambda") rest))
+                       (List (CONS (Symbol "lambda") rest))) /\
+   (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL env) l l'
+                    ==> EVAL env sexp (List l')) /\
+   (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
+                      ==> EVAL env sexp quoted)`;;
+
+let [EVAL_SYMB; EVAL_APP; EVAL_LAMBDA; EVAL_LIST; EVAL_QUOTED] =
+  CONJUNCTS EVAL_RULES;;
+
+let EVAL'''_RULES,EVAL'''_INDUCT,EVAL'''_CASES = new_inductive_definition
+  `(!env a x. RELASSOC a env x ==> EVAL''' env (Symbol a) x) /\
+   (!env f f' x x' v b y.
+      MATCHPROC1 f' v b /\ EVAL''' env f f' /\
+      EVAL''' (CONS (x',v) env) b y /\ EVAL''' env x x'
+      ==> EVAL''' env (List [f; x]) y) /\
+   (!env rest.
+      EVAL''' env
+        (List (CONS (Symbol "lambda") rest))
+        (List (CONS (Symbol "lambda") rest))) /\
+   (!env sexp l l'. MATCHTAGGED "list" sexp l /\ ALL2 (EVAL''' env) l l'
+                    ==> EVAL''' env sexp (List l')) /\
+   (!env sexp quoted. MATCHTAGGED "quote" sexp [quoted]
+                      ==> EVAL''' env sexp quoted)`;;
+
+let [EVAL_SYMB; EVAL_APP; EVAL_LAMBDA; EVAL_LIST; EVAL_QUOTED] =
+  CONJUNCTS EVAL'''_RULES;;
+
+(* ------------------------------------------------------------------------- *)
+(* (define quinec                                                            *)
+(*   '((lambda (x) (list x (list (quote quote) x)))                          *)
+(*     (quote                                                                *)
+(*       (lambda (x) (list x (list (quote quote) x))))))                     *)
+(* ------------------------------------------------------------------------- *)
+
+gg `??q. EVAL''' [] q q`;;
+ee (APPLY_SLV EVAL_APP);;
+ (* 1/4 *)
+ ee CONJ_SLV;;
+ ee (APPLY_SLV MATCHPROC1_RULES);;
+ ee (APPLY_SLV MATCHTAGGED_RULES);;
+
+ (* 2/4 *)
+ ee CONJ_SLV;;
+ ee (APPLY_SLV EVAL_LAMBDA);;
+
+ (* 3/4 *)
+ ee CONJ_SLV;;
+ ee (APPLY_SLV EVAL_LIST);;
+
+   (* 1/2 *)
+   ee CONJ_SLV;;
+   ee (APPLY_SLV MATCHTAGGED_RULES);;
+
+   (* 2/2 *)
+   ee (APPLY_SLV ALL2_CONS);;
+
+     (* 1/2 *)
+     ee CONJ_SLV;;
+     ee (APPLY_SLV EVAL_SYMB);;
+     ee (APPLY_SLV RELASSOC_HEAD);;
+
+     (* 2/2 *)
+     ee (APPLY_SLV ALL2_CONS);;
+
+       (* 1/2 *)
+       ee CONJ_SLV;;
+       ee (APPLY_SLV EVAL_LIST);;
+
+         (* 1/2 *)
+         ee CONJ_SLV;;
+         ee (APPLY_SLV MATCHTAGGED_RULES);;
+         
+         (* 2/2 *)
+         ee (APPLY_SLV ALL2_CONS);;
+
+           (* 1/2 *)
+           ee CONJ_SLV;;
+           ee (APPLY_SLV EVAL_QUOTED);;
+           ee (APPLY_SLV MATCHTAGGED_RULES);;
+
+           (* 2/2 *)
+           ee (APPLY_SLV ALL2_CONS);;
+
+             (* 1/2 *)
+             ee CONJ_SLV;;
+             ee (APPLY_SLV EVAL_SYMB);;
+             ee (APPLY_SLV RELASSOC_HEAD);;
+
+             (* 2/2 *)
+             ee (APPLY_SLV ALL2_NIL);;
+
+       (* 2/2 *)
+       ee (APPLY_SLV ALL2_NIL);;
+
+  (* 4/4 *)
+  ee (APPLY_SLV EVAL_QUOTED);;
+  ee (APPLY_SLV MATCHTAGGED_RULES);;
+
+top_thm1();;
