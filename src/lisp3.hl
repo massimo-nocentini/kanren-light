@@ -86,7 +86,20 @@ let MATCHBETA_RULES,MATCHBETA_INDUCT,MATCHBETA_CASES = new_inductive_definition
 (* ------------------------------------------------------------------------- *)
 
 let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
-  `(!e p q. MATCHTAGGED "quote" p [q] ==> EVAL e p q) /\
+  `(!e q. EVAL e (List [Symbol "quote"; q]) q) /\
+   (!e a x. RELASSOC a e x ==> EVAL e (Symbol a) x) /\
+   (!e f x x' v b y.
+      EVAL e f (List [Symbol "lambda"; List[Symbol v]; b]) /\
+      EVAL e x x' /\ EVAL (CONS (x',v) e) b y
+      ==> EVAL e (List [f; x]) y) /\
+   (!e l. EVAL e (List (CONS (Symbol "lambda") l))
+                 (List (CONS (Symbol "lambda") l))) /\
+   (!e l l'. ALL2 (EVAL e) l l'
+             ==> EVAL e (List (CONS (Symbol "list") l)) (List l'))`;;
+
+(*
+let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
+  `(!e q. EVAL e (List [Symbol "quote"; q]) q) /\
    (!e a x. RELASSOC a e x ==> EVAL e (Symbol a) x) /\
    (!e f f' x x' v b y. MATCHPROC1 f' v b /\ EVAL e f f' /\
                         EVAL e x x' /\ EVAL (CONS (x',v) e) b y
@@ -95,6 +108,7 @@ let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
                  (List (CONS (Symbol "lambda") l))) /\
    (!e p l l'. MATCHTAGGED "list" p l /\ ALL2 (EVAL e) l l'
                ==> EVAL e p (List l'))`;;
+*)
 
 let [EVAL_QUOTED; EVAL_SYMB; EVAL_APP; EVAL_LAMBDA; EVAL_LIST] =
   CONJUNCTS EVAL_RULES;;
@@ -108,66 +122,48 @@ let [EVAL_QUOTED; EVAL_SYMB; EVAL_APP; EVAL_LAMBDA; EVAL_LIST] =
 
 gg `??q. EVAL [] q q`;;
 ee (APPLY_SLV EVAL_APP);;
-  (* 1/4 *)
-  ee CONJ_SLV;;
-  ee (APPLY_SLV MATCHPROC1_RULES);;
-  ee (APPLY_SLV MATCHTAGGED_RULES);;
 
-  (* 2/4 *)
+  (* 1/3 *)
   ee CONJ_SLV;;
   ee (APPLY_SLV EVAL_LAMBDA);;
 
-  (* 3/4 *)
+  (* 2/3 *)
   ee CONJ_SLV;;
   ee (APPLY_SLV EVAL_QUOTED);;
-  ee (APPLY_SLV MATCHTAGGED_RULES);;
 
-  (* 4/4 *)
+  (* 3/3 *)
   ee (APPLY_SLV EVAL_LIST);;
+  ee (APPLY_SLV ALL2_CONS);;
 
     (* 1/2 *)
     ee CONJ_SLV;;
-    ee (APPLY_SLV MATCHTAGGED_RULES);;
+    ee (APPLY_SLV EVAL_SYMB);;
+    ee (APPLY_SLV RELASSOC_HEAD);;
 
     (* 2/2 *)
     ee (APPLY_SLV ALL2_CONS);;
 
       (* 1/2 *)
       ee CONJ_SLV;;
-      ee (APPLY_SLV EVAL_SYMB);;
-      ee (APPLY_SLV RELASSOC_HEAD);;
-
-      (* 2/2 *)
+      ee (APPLY_SLV EVAL_LIST);;
       ee (APPLY_SLV ALL2_CONS);;
 
         (* 1/2 *)
         ee CONJ_SLV;;
-        ee (APPLY_SLV EVAL_LIST);;
+        ee (APPLY_SLV EVAL_QUOTED);;
+
+        (* 2/2 *)
+        ee (APPLY_SLV ALL2_CONS);;
 
           (* 1/2 *)
           ee CONJ_SLV;;
-          ee (APPLY_SLV MATCHTAGGED_RULES);;
-         
+          ee (APPLY_SLV EVAL_SYMB);;
+          ee (APPLY_SLV RELASSOC_HEAD);;
+
           (* 2/2 *)
-          ee (APPLY_SLV ALL2_CONS);;
+          ee (APPLY_SLV ALL2_NIL);;
 
-            (* 1/2 *)
-            ee CONJ_SLV;;
-            ee (APPLY_SLV EVAL_QUOTED);;
-            ee (APPLY_SLV MATCHTAGGED_RULES);;
-
-            (* 2/2 *)
-            ee (APPLY_SLV ALL2_CONS);;
-
-              (* 1/2 *)
-              ee CONJ_SLV;;
-              ee (APPLY_SLV EVAL_SYMB);;
-              ee (APPLY_SLV RELASSOC_HEAD);;
-
-              (* 2/2 *)
-              ee (APPLY_SLV ALL2_NIL);;
-
-        (* 2/2 *)
-        ee (APPLY_SLV ALL2_NIL);;
+      (* 2/2 *)
+      ee (APPLY_SLV ALL2_NIL);;
 
 top_thm1();;
