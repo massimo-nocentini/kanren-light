@@ -302,7 +302,9 @@ let top_thm1() : thm =
 
 let top_thms() : thm stream =
   let s::_ = !current_mgoalstack in
-  stream_map (fun ((mvs,i),[],f) -> f i [])  s;;
+  let f ((mvs,i),gl,j) =
+    if gl = [] then singleton (j i []) else Empty in
+  bind s f;;
 
 (*
 gg `??X. 2 + X = 4`;;
@@ -447,7 +449,7 @@ let PROLOG_SLV conv thl : solver =
             EVERY_SLV [rule; TACTIC_SLV (REPEAT CONJ_TAC); PROLOG_SLV]
         with Failure _ -> ACCEPT_SLV th in
     THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) PROLOG_SLV in
-  let thl' = itlist (fun th acc -> striplist CONJ_PAIR th @ acc) thl [] in
+  let thl' = itlist (fun th acc -> CONJUNCTS th @ acc) thl [] in
   RAW_PROLOG_SLV thl';;
 
 (* ------------------------------------------------------------------------- *)
