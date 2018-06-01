@@ -1,4 +1,5 @@
 loadt "streams.hl";;
+loadt "misc.hl";;
 loadt "tunify.hl";;
 loadt "solvers.hl";;
 loadt "solvers_test.hl";;

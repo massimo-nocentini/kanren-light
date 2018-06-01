@@ -3,45 +3,6 @@
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
-(* Printer for mgoalstacs.                                                   *)
-(* ------------------------------------------------------------------------- *)
-
-let print_goalstate (gs:goalstate) =
-  let (_,gl,_) = gs in
-  if gl = [] then () else
-  do_list print_goal (rev gl);;
-
-let (print_mgoalstack:mgoalstack->unit) =
-  fun mgls ->
-    if mgls = [] then Format.print_string "Empty mgoalstack" else
-    let mgl = hd mgls in
-    if mgl = Empty then Format.print_string "No (more) solutions" else
-    print_goalstate (get mgl);;
-
-#install_printer print_mgoalstack;;
-
-(* ------------------------------------------------------------------------- *)
-(* Misc list helper theory.                                                  *)
-(* ------------------------------------------------------------------------- *)
-
-let ALL2_RULES = prove
- (`(!R:A->B->bool. ALL2 R [] []) /\
-   (!R h:A h':B t t'. R h h' /\ ALL2 R t t'
-                      ==> ALL2 R (CONS h t) (CONS h' t'))`,
-  REWRITE_TAC[ALL2]);;
-
-let ALL2_NIL,ALL2_CONS =
-  CONJ_PAIR (REWRITE_RULE [FORALL_AND_THM] ALL2_RULES);;
-
-(* Rev-Assoc relation. *)
-let RELASSOC_RULES,RELASSOC_INDUCT,RELASSOC_CASES = new_inductive_definition
-  `(!k:A v:B l. RELASSOC k (CONS (v,k) l) v) /\
-   (!k k' v v' l. ~(k = k') /\ RELASSOC k l v'
-                  ==> RELASSOC k (CONS (v,k') l) v')`;;
-
-let RELASSOC_HEAD,REALASSOC_TAIL = CONJ_PAIR RELASSOC_RULES;;
-
-(* ------------------------------------------------------------------------- *)
 (* Evaluation.                                                               *)
 (* ------------------------------------------------------------------------- *)
 
@@ -61,14 +22,6 @@ let [EVAL_QUOTED; EVAL_SYMB; EVAL_LAMBDA; EVAL_LIST; EVAL_APP] =
   CONJUNCTS EVAL_RULES;;
 
 (*
-gg `??q. EVAL [] q q`;;
-ee (APPLY_SLV EVAL_LIST);;
-ee (APPLY_SLV ALL2_CONS);;
-ee CONJ_SLV;;
-ee (APPLY_SLV EVAL_QUOTED);;
-top_thm1();;
-*)
-
 let RELASSOC_SLV : solver =
   PROLOG_SLV NO_CONV [RELASSOC_RULES];;
 
@@ -91,33 +44,35 @@ and EVAL_SLV g  =
     [EVAL_QUOTED_SLV; EVAL_SYMBOL_SLV; EVAL_LAMBDA_SLV;
      EVAL_LIST_SLV; EVAL_APP_SLV]
     g;;
+*)
+
+let rec RELASSOC_SLV : solver =
+  fun g ->
+    CONCAT_SLV (ACCEPT_SLV RELASSOC_HEAD)
+               (THEN_SLV (RULE_SLV RELASSOC_TAIL) RELASSOC_SLV)
+               g;;
+
+let rec ALL2_SLV (slv:solver) : solver =
+  fun g ->
+    CONCAT_SLV (ACCEPT_SLV ALL2_NIL)
+               (THEN_SLV (RULE_SLV ALL2_CONS)
+                         (THENL_SLV CONJ_SLV [slv; ALL2_SLV slv]))
+               g;;
 
 let STEP_SLV : solver =
   COLLECT_SLV
     [CONJ_SLV;
-     APPLY_SLV EVAL_QUOTED;
-     THEN_SLV (APPLY_SLV EVAL_SYMB) RELASSOC_SLV;
-     APPLY_SLV EVAL_LAMBDA;
-     APPLY_SLV EVAL_LIST;
-     APPLY_SLV EVAL_APP;
-     APPLY_SLV ALL2_NIL;
-     APPLY_SLV ALL2_CONS];;
+     ACCEPT_SLV EVAL_QUOTED;
+     THEN_SLV (RULE_SLV EVAL_SYMB) RELASSOC_SLV;
+     ACCEPT_SLV EVAL_LAMBDA;
+     RULE_SLV EVAL_LIST;
+     RULE_SLV EVAL_APP;
+     ACCEPT_SLV ALL2_NIL;
+     RULE_SLV ALL2_CONS];;
 
 let rec EVAL_SLV : solver =
   fun g ->
-    Format.print_string "Ciao!";
-    Format.print_newline();
-    Format.print_flush();
     CONCAT_SLV ALL_SLV (THEN_SLV STEP_SLV EVAL_SLV) g;;
-
-let ss () =
-  let gs = next(hd !current_mgoalstack) in
-  current_mgoalstack := gs :: !current_mgoalstack;
-  !current_mgoalstack;;
-
-gg `2 + 2 = 4`;;
-ee (THEN_SLV (TACTIC_SLV ARITH_TAC) NO_SLV);;
-take 10 (top_thms());;
 
 gg `??q. EVAL [] q q`;;
 ee EVAL_SLV;;
@@ -126,7 +81,28 @@ ss();;
 ss();;
 ss();;
 top_thm1();;
-take 1 (top_thms());;
+let s = top_thms () in
+time (take 4) s;;
+
+let sols = top_thms();;
+let sols1 = next sols;;
+let sols2 = time next sols1;;
+let sols3 = time next sols2;;
+
+let q0 = get sols
+and q1 = get sols1
+and q2 = get sols2
+and q3 = get sols3;;
+
+let [q0;q1;q2;q3] = it;;
+rand(concl q1);;
+vsubst [`"x":string`,`_633735:string`] (rand(concl q1));;
+rand(concl q2);;
+vsubst [`"x":string`,`_854999:string`] (rand(concl q2));;
+
+vsubst [`"x":string`,`:string`] (rand(concl q2));;
+rand(concl q3);;
+vsubst [`"x":string`,`_4140356:string`] (rand(concl q3));;
 
 let [th] = it;;
 let quine = vsubst [`"x":string`,`_477070:string`] (rand(concl th));;
