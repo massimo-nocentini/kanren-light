@@ -1,0 +1,100 @@
+(* ========================================================================= *)
+(* Lock.                                                                     *)
+(* ========================================================================= *)
+
+let LOCK_RULES,LOCK_INDUCT,LOCK_CASES = new_inductive_definition
+  `(!x. LOCK (CONS 2 x) x) /\
+   (!x y. LOCK x y ==> LOCK (CONS 3 x) (APPEND y (CONS 2 y)))`;;
+
+let LOCK_RULE1,LOCK_RULE2 = CONJ_PAIR LOCK_RULES;;
+
+g `!x y z. LOCK x y /\ z = APPEND y (CONS 2 y) ==> LOCK (CONS 3 x) z`;;
+e (MESON_TAC[LOCK_RULE2]);;
+let LOCK_RULE2' = top_thm();;
+
+g `LOCK [3;2;3] [3;2;3]`;;
+e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [APPEND] `APPEND [3] [2;3]`)]);;
+e (MATCH_MP_TAC LOCK_RULE2);;
+e (MATCH_ACCEPT_TAC LOCK_RULE1);;
+let yeah = top_thm();;
+
+g `!l:A list. l = APPEND [] l`;;
+e (REWRITE_TAC[APPEND]);;
+let REFL_APPEND_NIL = top_thm();;
+
+
+g `!h:A t t' l1 l2.
+     l1 = CONS h t' /\ t = APPEND t' l2 ==> CONS h t = APPEND l1 l2`;;
+e (REPEAT STRIP_TAC THEN REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC));;
+e (REWRITE_TAC[APPEND]);;
+let CONS_EQ_APPEND = top_thm();;
+
+gg `??x. LOCK x x`;;
+ee (APPLY_SLV LOCK_RULE1);;
+bb();;
+ee (APPLY_SLV LOCK_RULE2);;
+bb();;
+ee (APPLY_SLV LOCK_RULE2');;
+ee CONJ_SLV;;
+ee (APPLY_SLV LOCK_RULE1);;
+ee (APPLY_SLV CONS_EQ_APPEND);;
+ee CONJ_SLV;;
+ee REFL_SLV;;
+ee (APPLY_SLV REFL_APPEND_NIL);;
+top_thm1();;
+
+let STEP_SLV : solver =
+  COLLECT_SLV
+    [CONJ_SLV;
+     REFL_SLV;
+     ACCEPT_SLV LOCK_RULE1;
+     RULE_SLV LOCK_RULE2';
+     ACCEPT_SLV REFL_APPEND_NIL;
+     RULE_SLV CONS_EQ_APPEND];;
+
+let rec SEARCH_SLV : solver =
+  fun g -> CONCAT_SLV ALL_SLV (THEN_SLV STEP_SLV SEARCH_SLV) g;;
+
+gg `??x. LOCK x x`;;
+ee SEARCH_SLV;;
+let sols = top_thms();;
+let sols1 = next sols;;
+
+(* ------------------------------------------------------------------------- *)
+
+
+(*
+M-I: For any number X,  2X2 produces X.
+M-II: If X produces Y, then 6X produces 2Y.
+M-III: If X produces Y, then 4X produces REV Y (as with the last machine).
+M-IV: If X produces Y, then 5X produces YY (as with the last machine).
+*)
+
+let LOCK2_RULES,LOCK2_INDUCT,LOCK2_CASES = new_inductive_definition
+  `(!x. LOCK2 (CONS 2 (APPEND x [2])) x) /\
+   (!x y. LOCK2 x y ==> LOCK2 (CONS 6 x) (CONS 2 y)) /\
+   (!x y. LOCK2 x y ==> LOCK2 (CONS 4 x) (REVERSE y)) /\
+   (!x y. LOCK2 x y ==> LOCK2 (CONS 5 x) (APPEND y y))`;;
+
+let [L1;L2;L3;L4] = CONJUNCTS LOCK2_RULES;;
+
+let L4' = prove
+ (`!x y z. LOCK2 x y /\ z = APPEND y y ==> LOCK2 (CONS 5 x) z`,
+  MESON_TAC[L4]);;
+
+g `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
+e (SUBGOAL_THEN `[5;4;6;4;2;5;4;6;4;2] = APPEND [5;4;6;4;2] [5;4;6;4;2]`
+     (fun th -> GEN_REWRITE_TAC RAND_CONV [th]));;
+e (REWRITE_TAC[APPEND]);;
+e (MATCH_MP_TAC L4');;
+e (EXISTS_TAC `[5;4;6;4;2]`);;
+e CONJ_TAC;;
+e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND] `REVERSE [2;4;6;4;5]`)]);;
+e (MATCH_MP_TAC L3);;
+e (MATCH_MP_TAC L2);;
+e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND] `REVERSE [5;4;6;4]`)]);;
+e (MATCH_MP_TAC L3);;
+e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND] `(CONS 2 (APPEND [5;4;6;4] [2]))`)]);;
+e (MATCH_ACCEPT_TAC L1);;
+e REFL_TAC;;
+top_thm();;
