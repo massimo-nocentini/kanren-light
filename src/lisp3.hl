@@ -21,31 +21,6 @@ let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
 let [EVAL_QUOTED; EVAL_SYMB; EVAL_LAMBDA; EVAL_LIST; EVAL_APP] =
   CONJUNCTS EVAL_RULES;;
 
-(*
-let RELASSOC_SLV : solver =
-  PROLOG_SLV NO_CONV [RELASSOC_RULES];;
-
-let EVAL_QUOTED_SLV = APPLY_SLV EVAL_QUOTED;;
-let EVAL_SYMBOL_SLV = THEN_SLV (APPLY_SLV EVAL_SYMB) RELASSOC_SLV;;
-let EVAL_LAMBDA_SLV = APPLY_SLV EVAL_LAMBDA;;
-
-let rec EVAL_LIST_SLV g = THEN_SLV (APPLY_SLV EVAL_LIST) ALL2_SLV g
-and ALL2_SLV g =
-  MPLUS_SLV (ACCEPT_SLV ALL2_NIL)
-    (THEN_SLV (APPLY_SLV ALL2_CONS)
-              (THENL_SLV CONJ_SLV [EVAL_SLV; ALL2_SLV]))
-    g
-and EVAL_APP_SLV g =
-  THEN_SLV (APPLY_SLV EVAL_APP)
-    (THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC)) EVAL_SLV)
-    g
-and EVAL_SLV g  =
-  INTERLEAVE_SLV
-    [EVAL_QUOTED_SLV; EVAL_SYMBOL_SLV; EVAL_LAMBDA_SLV;
-     EVAL_LIST_SLV; EVAL_APP_SLV]
-    g;;
-*)
-
 let rec RELASSOC_SLV : solver =
   fun g ->
     CONCAT_SLV (ACCEPT_SLV RELASSOC_HEAD)
@@ -84,19 +59,19 @@ top_thm1();;
 let s = top_thms () in
 time (take 4) s;;
 
-let sols = top_thms();;
-let sols1 = next sols;;
+let sols = time top_thms();;
+let sols1 = time next sols;;
 let sols2 = time next sols1;;
 let sols3 = time next sols2;;
 
-let q0 = get sols
-and q1 = get sols1
-and q2 = get sols2
-and q3 = get sols3;;
+let q0 = get sols;;
+let q1 = get sols1;;
+let q2 = get sols2;;
+let q3 = get sols3;;
 
 let [q0;q1;q2;q3] = it;;
 rand(concl q1);;
-vsubst [`"x":string`,`_633735:string`] (rand(concl q1));;
+vsubst [`"x":string`,`_410728:string`] (rand(concl q1));;
 rand(concl q2);;
 vsubst [`"x":string`,`_854999:string`] (rand(concl q2));;
 
@@ -210,50 +185,3 @@ ee (APPLY_SLV EVAL_APP);;
         [ALL2_RULES; EVAL_QUOTED; EVAL_SYMB; EVAL_LIST; RELASSOC_HEAD]);;
 
 top_thm1();;
-
-gg `??q. EVAL [] q q`;;
-ee (THEN_SLV (APPLY_SLV EVAL_APP)
-     (THEN_SLV (TACTIC_SLV (REPEAT CONJ_TAC))
-        (PROLOG_SLV NO_CONV [ALL2_RULES; EVAL_RULES; RELASSOC_HEAD])));;
-take 6 (top_thms());;
-
-gg `??q. EVAL [] q q`;;
-ee (PROLOG_SLV NO_CONV [ALL2_RULES; EVAL_RULES; RELASSOC_HEAD]);;
-top_thm1();;
-(* Diverge! *)
-(*;;
-take 2 (top_thms());;  
-*)
-
-(* ------------------------------------------------------------------------- *)
-(* Ulteriore esperimenti.                                                    *)
-(* ------------------------------------------------------------------------- *)
-
-
-(*
-gg `??q. EVAL [] q q`;;
-ee (MAP_INTERLEAVE_SLV APPLY_SLV (CONJUNCTS EVAL_RULES));;
-ee (PROLOG_SLV NO_CONV [ALL2_RULES; EVAL_RULES; RELASSOC_HEAD]);;
-
-
-ee (APPLY_SLV EVAL_RULES);;
-
-
-
-gg `??q. EVAL [] q q`;;
-ee (APPLY_SLV EVAL_LIST);;
-(*
-ee (PROLOG_SLV NO_CONV [ALL2_RULES; EVAL_RULES; RELASSOC_HEAD]);;
-ee (APPLY_SLV ALL2_NIL);;
-*)
-
-ee (APPLY_SLV ALL2_CONS);;
-ee CONJ_SLV;;
-ee (PROLOG_SLV NO_CONV [ALL2_RULES; EVAL_RULES; RELASSOC_HEAD]);;
-ee (APPLY_SLV ALL2_CONS);;
-ee CONJ_SLV;;
-ee (PROLOG_SLV NO_CONV [ALL2_RULES; EVAL_RULES; RELASSOC_HEAD]);;
-
-top_thm1();;
-
-*)
