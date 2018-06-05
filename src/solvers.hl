@@ -288,7 +288,7 @@ let (mby:solver->(mgoalstate->mgoalstate)) =
               just i' sths in
             (mvs',inst'),gls',just')
           (slv (mvs,g)));;
- 
+
 (* MVALID ? *)
 (*  let e tac = refine(by(VALID tac));; *)
 
@@ -300,16 +300,22 @@ let ss () =
   current_mgoalstack := gs :: !current_mgoalstack;
   !current_mgoalstack;;
 
-let top_thm1() : thm =
-  let s::_ = !current_mgoalstack in
-  let ((mvs,i),[],f) = get s in 
-  f i [];;
-
 let top_thms() : thm stream =
   let s::_ = !current_mgoalstack in
   let f ((mvs,i),gl,j) =
     if gl = [] then singleton (j i []) else Empty in
   bind s f;;
+
+(* This version do not filter incomplete solutions. *)
+(*
+let top_thm1() : thm =
+  let s::_ = !current_mgoalstack in
+  let ((mvs,i),[],f) = get s in
+  f i [];;
+*)
+
+let top_thm1() : thm =
+  get (top_thms());;
 
 (*
 gg `??X. 2 + X = 4`;;
