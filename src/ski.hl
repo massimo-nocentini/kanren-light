@@ -1,0 +1,227 @@
+(* ========================================================================= *)
+(* SKI combinators.                                                          *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Versione alternativa di prova di REPEAT2_SLV.                             *)
+(* ------------------------------------------------------------------------- *)
+
+let rec REPEAT2_SLV (slv : solver) : solver =
+  fun g -> CONCAT_SLV ALL_SLV (THEN_SLV slv (REPEAT2_SLV slv)) g ;;
+
+(* ------------------------------------------------------------------------- *)
+(* Definizione dei combinatori SKI e della riduzione.                        *)
+(* ------------------------------------------------------------------------- *)
+
+let ski_INDUCT,ski_RECUR = define_type
+  "ski = _S
+       | _K
+       | _I
+       | App ski ski";;
+
+let REDU_RULES,REDU_INDUCT,REDU_CASES = new_inductive_definition
+  `(!x. REDU (App _I x) x) /\
+   (!x y. REDU (App (App _K x) y) x) /\
+   (!x y z. REDU (App (App (App _S x) y) z) (App (App x z) (App y z))) /\
+   (!x x' y. REDU x x' ==> REDU (App x y) (App x' y)) /\
+   (!x y y'. REDU y y' ==> REDU (App x y) (App x y')) /\
+   (!x. REDU x x) /\
+   (!x y. REDU x y ==> REDU y x) /\
+   (!x y z. REDU x y /\ REDU y z ==> REDU x z)`;;
+
+let [REDU_I; REDU_K; REDU_S; REDU_RATOR; REDU_RAND;
+     REDU_REFL; REDU_SYM; REDU_TRANS] =
+  CONJUNCTS REDU_RULES;;
+
+(* ------------------------------------------------------------------------- *)
+(* Fixed-point combinator:                                                   *)
+(*   S (K (S I I)) (S (S (K S) K) (K (S I I)))                               *)
+(* ------------------------------------------------------------------------- *)
+
+let YCOMB = new_definition
+  `YCOMB =
+     App (App _S (App _K (App (App _S _I) _I)))
+         (App (App _S (App (App _S (App _K _S)) _K))
+              (App _K (App (App _S _I) _I)))`;;
+ 
+(* Troppo difficile sia per MESON che per METIS. *)
+(*
+let YCOMP_FIX = prove
+ (`!f. REDU (App YCOMB f) (App f (App YCOMB f))`,
+  GEN_TAC THEN
+  REWRITE_TAC[YCOMB]
+  METIS_TAC[REDU_RULES]
+;;
+*)
+
+(* ------------------------------------------------------------------------- *)
+(*                        DIMOSTRAZIONE MANUALE                              *)
+(* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
+(* Remark 1: M f = App f (M[f]).                                             *)
+(* NB: Dimostrato a mano.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+g `(M = \f. App (App (App _S _I) _I)
+                (App (App _S (App _K f)) (App (App _S _I) _I)))
+    ==> !f. REDU (M f) (App f (M f))`;;
+e (DISCH_THEN SUBST_VAR_TAC THEN REWRITE_TAC[] THEN GEN_TAC THEN
+ MATCH_MP_TAC REDU_TRANS THEN
+ EXISTS_TAC `App (App _I (App (App _S (App _K f)) (App (App _S _I) _I))) (App _I (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
+ CONJ_TAC THENL [MATCH_ACCEPT_TAC REDU_S; ALL_TAC] THEN
+ MATCH_MP_TAC REDU_TRANS THEN
+ EXISTS_TAC `(App (App (App _S (App _K f)) (App (App _S _I) _I)) (App _I (App (App _S (App _K f)) (App (App _S _I) _I))))` THEN
+ CONJ_TAC THENL [MATCH_MP_TAC REDU_RATOR THEN MATCH_ACCEPT_TAC REDU_I; ALL_TAC] THEN
+ MATCH_MP_TAC REDU_TRANS THEN
+ EXISTS_TAC `(App (App (App _S (App _K f)) (App (App _S _I) _I)) (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
+ CONJ_TAC THENL [MATCH_MP_TAC REDU_RAND THEN MATCH_ACCEPT_TAC REDU_I; ALL_TAC] THEN
+ MATCH_MP_TAC REDU_TRANS THEN
+ EXISTS_TAC `App (App (App _K f) (App (App _S (App _K f)) (App (App _S _I) _I))) (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
+ CONJ_TAC THENL [MATCH_ACCEPT_TAC REDU_S; ALL_TAC] THEN
+ MATCH_MP_TAC REDU_RATOR THEN
+ MATCH_ACCEPT_TAC REDU_K);;
+let rmk1 = top_thm();;
+
+(* ------------------------------------------------------------------------- *)
+(* Remark 2: App Y f = M[f].                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+gg `(M = \f. App (App (App _S _I) _I)
+                 (App (App _S (App _K f)) (App (App _S _I) _I)))
+    ==> !f. REDU (App YCOMB f) (M f)`;;
+ee DISCH_SLV;;
+ee GEN_SLV;;
+ee (TACTIC_SLV (REWRITE_TAC[YCOMB]));;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (ACCEPT_SLV REDU_S);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (RULE_SLV REDU_RATOR);;
+ee (ACCEPT_SLV REDU_K);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (RULE_SLV REDU_RAND);;
+ee (ACCEPT_SLV REDU_S);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (RULE_SLV REDU_RAND);;
+
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (RULE_SLV REDU_RAND);;
+ee (ACCEPT_SLV REDU_K);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (RULE_SLV REDU_RATOR);;
+ee (ACCEPT_SLV REDU_S);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (RULE_SLV REDU_RATOR);;
+ee (RULE_SLV REDU_RATOR);;
+ee (ACCEPT_SLV REDU_K);;
+ee (ACCEPT_SLV REDU_REFL);;
+ee (TACTIC_SLV (POP_ASSUM SUBST_VAR_TAC));;
+ee (TACTIC_SLV (REWRITE_TAC[REDU_REFL]));;
+let rmk2 = top_thm1();;
+
+(* ------------------------------------------------------------------------- *)
+(* Teorema: Y è il fixed-point combinator.  Usando rmk1 e rmk2.              *)
+(* ------------------------------------------------------------------------- *)
+
+g `!f. REDU (App YCOMB f) (App f (App YCOMB f))`;;
+e GEN_TAC;;
+e (ABBREV_TAC `M = (\f. App (App (App _S _I) _I)
+           (App (App _S (App _K f)) (App (App _S _I) _I)))`);;
+e (TRANS_TAC REDU_TRANS `M (f:ski) : ski`);;
+e CONJ_TAC;;
+e (MATCH_MP_TAC (REWRITE_RULE [RIGHT_IMP_FORALL_THM] rmk2));;
+e (ASM_REWRITE_TAC[]);;
+e (TRANS_TAC REDU_TRANS `App f (M f)`);;
+e CONJ_TAC;;
+e (MATCH_MP_TAC (REWRITE_RULE [RIGHT_IMP_FORALL_THM] rmk1));;
+e (ASM_REWRITE_TAC[]);;
+e (MATCH_MP_TAC REDU_RAND);;
+e (MATCH_MP_TAC REDU_SYM);;
+e (MATCH_MP_TAC (REWRITE_RULE [RIGHT_IMP_FORALL_THM] rmk2));;
+e (ASM_REWRITE_TAC[]);;
+let YCOMB_FIX = top_thm();;
+
+(* ------------------------------------------------------------------------- *)
+(* TENATIVO DI RICERCA AUTOMATICA.                                           *)
+(* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
+(* Questo non funziona.                                                      *)
+(* ------------------------------------------------------------------------- *)
+
+let STEP_SLV : solver =
+  COLLECT_SLV
+    [CONJ_SLV;
+     ACCEPT_SLV REDU_I;
+     ACCEPT_SLV REDU_K;
+     ACCEPT_SLV REDU_S;
+     ACCEPT_SLV REDU_REFL;
+     (* RULE_SLV REDU_SYM;; *)
+     RULE_SLV REDU_RAND;
+     RULE_SLV REDU_RATOR;
+     RULE_SLV REDU_TRANS];;
+
+let rec REDU_SLV : solver =
+  fun g -> CONCAT_SLV ALL_SLV (THEN_SLV STEP_SLV REDU_SLV) g;;
+
+(* ------------------------------------------------------------------------- *)
+(* Nuova stragegia.  Fare prima I e K e sennò S (in profondità).             *)
+(* ------------------------------------------------------------------------- *)
+
+let rec SKI_DEPTH_SLV (slv : solver) : solver =
+  fun g -> COLLECT_SLV
+             [slv; 
+              THEN_SLV (RULE_SLV REDU_RAND) (SKI_DEPTH_SLV slv);
+              THEN_SLV (RULE_SLV REDU_RATOR) (SKI_DEPTH_SLV slv)]
+             g;;
+
+let STEP0_SLV : solver =
+  CONCAT_SLV
+    (SKI_DEPTH_SLV (CONCAT_SLV (ACCEPT_SLV REDU_I) (ACCEPT_SLV REDU_K)))
+    (SKI_DEPTH_SLV (ACCEPT_SLV REDU_S));;
+
+let SUPERSTEP_SLV : solver =
+  CONCAT_SLV
+    (ACCEPT_SLV REDU_REFL)
+    (THENL_SLV (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV) 
+               [STEP0_SLV; ALL_SLV]);;
+
+(* ------------------------------------------------------------------------- *)
+(* M[f] :=                                                                   *)
+(*   App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)) *)
+(* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
+(* Lemma: M[f] = f(M[f])                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+gg `REDU
+ (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)))
+ (App f
+ (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
+ee (REPEAT_SLV SUPERSTEP_SLV);;
+top_thm1();;
+
+(* ------------------------------------------------------------------------- *)
+(* Funziona anche con MESON.                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+g `REDU
+ (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)))
+ (App f
+ (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
+e (MESON_TAC[REDU_RULES]);;
+top_thm();;
+
+(* ------------------------------------------------------------------------- *)
+(* Lemma: App YCOMB f = App f (M[f]).                                        *)
+(* NB: In realtà volevamo App YCOMB f = M[f] ma per qualche motivo la nostra *)
+(*     strategia non la trova.                                               *)
+(* ------------------------------------------------------------------------- *)
+
+gg `!f. REDU (App YCOMB f)
+             (App f (App (App (App _S _I) _I)
+                    (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
+ee (TACTIC_SLV (GEN_TAC THEN REWRITE_TAC[YCOMB]));;
+ee (REPEAT_SLV SUPERSTEP_SLV);;
+top_thm1();;
