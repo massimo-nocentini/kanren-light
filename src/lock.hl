@@ -1,6 +1,10 @@
 (* ========================================================================= *)
-(* Lock.                                                                     *)
+(* Examples from The Mystery of the Monte Carlo Lock.                        *)
 (* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* First example.                                                            *)
+(* ------------------------------------------------------------------------- *)
 
 let LOCK_RULES,LOCK_INDUCT,LOCK_CASES = new_inductive_definition
   `(!x. LOCK (CONS 2 x) x) /\
@@ -21,7 +25,6 @@ let yeah = top_thm();;
 g `!l:A list. l = APPEND [] l`;;
 e (REWRITE_TAC[APPEND]);;
 let REFL_APPEND_NIL = top_thm();;
-
 
 g `!h:A t t' l1 l2.
      l1 = CONS h t' /\ t = APPEND t' l2 ==> CONS h t = APPEND l1 l2`;;
@@ -58,17 +61,19 @@ let rec SEARCH_SLV : solver =
 gg `??x. LOCK x x`;;
 ee SEARCH_SLV;;
 let sols = top_thms();;
+(* Diverge!
+;;
 let sols1 = next sols;;
+*)
 
 (* ------------------------------------------------------------------------- *)
-
-
-(*
-M-I: For any number X,  2X2 produces X.
-M-II: If X produces Y, then 6X produces 2Y.
-M-III: If X produces Y, then 4X produces REV Y (as with the last machine).
-M-IV: If X produces Y, then 5X produces YY (as with the last machine).
-*)
+(* Second example.                                                           *)
+(*                                                                           *)
+(* M-I:   For any number X,  2X2 produces X.                                 *)
+(* M-II:  If X produces Y, then 6X produces 2Y.                              *)
+(* M-III: If X produces Y, then 4X produces REVERSE Y.                       *)
+(* M-IV:  If X produces Y, then 5X produces YY.                              *)
+(* ------------------------------------------------------------------------- *)
 
 let LOCK2_RULES,LOCK2_INDUCT,LOCK2_CASES = new_inductive_definition
   `(!x. LOCK2 (CONS 2 (APPEND x [2])) x) /\
@@ -89,12 +94,15 @@ e (REWRITE_TAC[APPEND]);;
 e (MATCH_MP_TAC L4');;
 e (EXISTS_TAC `[5;4;6;4;2]`);;
 e CONJ_TAC;;
-e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND] `REVERSE [2;4;6;4;5]`)]);;
+e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND]
+     `REVERSE [2;4;6;4;5]`)]);;
 e (MATCH_MP_TAC L3);;
 e (MATCH_MP_TAC L2);;
-e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND] `REVERSE [5;4;6;4]`)]);;
+e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND]
+     `REVERSE [5;4;6;4]`)]);;
 e (MATCH_MP_TAC L3);;
-e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND] `(CONS 2 (APPEND [5;4;6;4] [2]))`)]);;
+e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND]
+     `(CONS 2 (APPEND [5;4;6;4] [2]))`)]);;
 e (MATCH_ACCEPT_TAC L1);;
 e REFL_TAC;;
 top_thm();;
