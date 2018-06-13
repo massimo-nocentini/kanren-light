@@ -1,6 +1,12 @@
 (* ========================================================================= *)
-(* Lambda calculus encoded with de Brujin indexes and SKI combinators.       *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Lambda calculus encoded with de Brujin indexes and SKI combinators.       *)
+(* ------------------------------------------------------------------------- *)
 
 needs "Library/rstc.ml";;
 needs "ski.ml";;

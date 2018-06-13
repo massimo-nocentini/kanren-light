@@ -1,6 +1,12 @@
 (* ========================================================================= *)
-(* Basic implemenation of stremas.                                           *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Basic implemenation of stremas.                                           *)
+(* ------------------------------------------------------------------------- *)
 
 type 'a stream = Empty | Cons of 'a * (unit -> 'a stream);;
 

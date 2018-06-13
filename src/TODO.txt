@@ -1,23 +1,13 @@
-- File separato di solvers per l'aritmetica?
+- File separato di solvers per l'aritmetica? E test separati.
+- File test separato per lisp.hl
 - Test?
 - Macchine di turing.
 
-Da aggiornare:
+Da rivedere
 
-README.md
-
-File da commentare:
-
-itaut.hl
-lambda.hl
-lisp2.hl
-lisp3.hl
-lisp.hl
-loadall
-lock.hl
-make.hl
-runhol
-ski.hl
+- itaut.hl contiene anche i test.
+- muovere misc.hl in lisp.hl.
+- FIRST_ASSUM_SLV ??
 
 Da sistemare (rimuovere?)
 kanren

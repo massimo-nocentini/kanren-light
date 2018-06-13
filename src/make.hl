@@ -5,7 +5,7 @@
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
-(* The core library.                                                         *)
+(* Load the core library.                                                    *)
 (* ------------------------------------------------------------------------- *)
 
 loadt "streams.hl";;                    (* Library for streams              *)
@@ -13,12 +13,3 @@ loadt "misc.hl";;                       (* Miscellanea                      *)
 loadt "tunify.hl";;                     (* Unification helper functions     *)
 loadt "solvers.hl";;                    (* Basic solvers and HO solvers     *)
 loadt "list_solvers.hl";;               (* Solvers for lists                *)
-
-(* ------------------------------------------------------------------------- *)
-(* Tests and examples.                                                       *)
-(* ------------------------------------------------------------------------- *)
-
-loadt "solvers_test.hl";;               (* Tests for basic solvers          *)
-loadt "list_solvers_test.hl";;          (* Tests for lists solvers          *)
-loadt "sexp.hl";;                       (* Datatype and syntax for sexps    *)
-(* loadt "lisp.hl";; *)

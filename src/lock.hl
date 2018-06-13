@@ -1,6 +1,12 @@
 (* ========================================================================= *)
-(* Examples from The Mystery of the Monte Carlo Lock.                        *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Examples from The Mystery of the Monte Carlo Lock.                        *)
+(* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
 (* First example.                                                            *)
@@ -17,7 +23,8 @@ e (MESON_TAC[LOCK_RULE2]);;
 let LOCK_RULE2' = top_thm();;
 
 g `LOCK [3;2;3] [3;2;3]`;;
-e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [APPEND] `APPEND [3] [2;3]`)]);;
+e (GEN_REWRITE_TAC RAND_CONV
+     [GSYM (REWRITE_CONV [APPEND] `APPEND [3] [2;3]`)]);;
 e (MATCH_MP_TAC LOCK_RULE2);;
 e (MATCH_ACCEPT_TAC LOCK_RULE1);;
 let yeah = top_thm();;

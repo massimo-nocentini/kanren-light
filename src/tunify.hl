@@ -1,3 +1,13 @@
+(* ========================================================================= *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Unification for types and terms.                                          *)
+(* ------------------------------------------------------------------------- *)
+
 (* ------------------------------------------------------------------------- *)
 (* Unification for types.                                                    *)
 (* Not needed anymore, an implementation by Michael Faerber is now           *)
@@ -39,6 +49,10 @@ let tunify : hol_type -> hol_type -> (hol_type * hol_type) list
 let type_unify : hol_type -> hol_type -> (hol_type * hol_type) list =
   fun ty1 ty2 -> tunify ty1 ty2 [];;
 *)
+
+(* ------------------------------------------------------------------------- *)
+(* Unification for terms.                                                    *)
+(* ------------------------------------------------------------------------- *)
 
 let rec type_term_unify : term -> term ->
      (hol_type * hol_type) list -> (hol_type * hol_type) list =

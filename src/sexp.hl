@@ -1,10 +1,16 @@
 (* ========================================================================= *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
 (* Lisp symbolic expressions as an object language in HOL (and ML).          *)
 (* Content of the file:                                                      *)
 (*  - Sexps in ML, together with a parser and a printer.                     *)
 (*  - Sexps in HOL, with syntax.                                             *)
 (*  - A meta-circular evaluator for a lisp-like language.                    *)
-(* ========================================================================= *)
+(* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
 (* Elementary support for sexps in ML.                                       *)
