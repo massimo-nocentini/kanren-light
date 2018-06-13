@@ -1,5 +1,7 @@
 (* ========================================================================= *)
 (* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
 
 needs "streams.hl";;

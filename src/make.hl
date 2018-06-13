@@ -1,9 +1,24 @@
-loadt "streams.hl";;
-loadt "misc.hl";;
-loadt "tunify.hl";;
-loadt "solvers.hl";;
-loadt "solvers_test.hl";;
-loadt "list_solvers.hl";;
-loadt "list_solvers_test.hl";;
-loadt "sexp.hl";;
+(* ========================================================================= *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* The core library.                                                         *)
+(* ------------------------------------------------------------------------- *)
+
+loadt "streams.hl";;                    (* Library for streams              *)
+loadt "misc.hl";;                       (* Miscellanea                      *)
+loadt "tunify.hl";;                     (* Unification helper functions     *)
+loadt "solvers.hl";;                    (* Basic solvers and HO solvers     *)
+loadt "list_solvers.hl";;               (* Solvers for lists                *)
+
+(* ------------------------------------------------------------------------- *)
+(* Tests and examples.                                                       *)
+(* ------------------------------------------------------------------------- *)
+
+loadt "solvers_test.hl";;               (* Tests for basic solvers          *)
+loadt "list_solvers_test.hl";;          (* Tests for lists solvers          *)
+loadt "sexp.hl";;                       (* Datatype and syntax for sexps    *)
 (* loadt "lisp.hl";; *)

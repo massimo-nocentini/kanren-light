@@ -1,3 +1,25 @@
-- Generazione del quine.
+- File separato di solvers per l'aritmetica?
 - Test?
 - Macchine di turing.
+
+Da aggiornare:
+
+README.md
+
+File da commentare:
+
+itaut.hl
+lambda.hl
+lisp2.hl
+lisp3.hl
+lisp.hl
+loadall
+lock.hl
+make.hl
+runhol
+ski.hl
+
+Da sistemare (rimuovere?)
+kanren
+old
+TODO.txt
