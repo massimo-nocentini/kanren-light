@@ -597,11 +597,22 @@ ITAUT `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
        padre a b
        ==> ?x:A. nonno a x`;;
 
-(map (concl o snd) o take 100 o
- solve (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV)))
-  `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
-          padre c d &&
-          padre a c &&
-          padre a b
-          ?- nonno a x`;;
+gg `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
+           padre c d &&
+           padre a c &&
+           padre a b
+           ?- nonno a x`;;
+ee (RULE_SLV (ASSUME `!x y z. padre x y /\ padre y z ==> nonno x z`));;
+ee CONJ_SLV;;
+ee (ACCEPT_SLV (ASSUME `padre (a:A) (c:A) : bool`));;
+ee (ACCEPT_SLV (ASSUME `padre (c:A) (d:A) : bool`));;
+top_thm1();;
+
+gg `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
+           padre c d &&
+           padre a c &&
+           padre a b
+           ?- nonno a x`;;
+ee (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV));;
+top_thm1();;
 *)

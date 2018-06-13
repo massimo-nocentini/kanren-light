@@ -3,7 +3,7 @@
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
-(* Versione alternativa di prova di REPEAT2_SLV.                             *)
+(* Versione alternativa di prova di REPEAT_SLV.                              *)
 (* ------------------------------------------------------------------------- *)
 
 let rec REPEAT2_SLV (slv : solver) : solver =
@@ -63,25 +63,36 @@ let YCOMP_FIX = prove
 (* NB: Dimostrato a mano.                                                    *)
 (* ------------------------------------------------------------------------- *)
 
-g `(M = \f. App (App (App _S _I) _I)
+
+let YCOMB_LEMMA1 = prove
+ (`(M = \f. App (App (App _S _I) _I)
                 (App (App _S (App _K f)) (App (App _S _I) _I)))
-    ==> !f. REDU (M f) (App f (M f))`;;
-e (DISCH_THEN SUBST_VAR_TAC THEN REWRITE_TAC[] THEN GEN_TAC THEN
- MATCH_MP_TAC REDU_TRANS THEN
- EXISTS_TAC `App (App _I (App (App _S (App _K f)) (App (App _S _I) _I))) (App _I (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
- CONJ_TAC THENL [MATCH_ACCEPT_TAC REDU_S; ALL_TAC] THEN
- MATCH_MP_TAC REDU_TRANS THEN
- EXISTS_TAC `(App (App (App _S (App _K f)) (App (App _S _I) _I)) (App _I (App (App _S (App _K f)) (App (App _S _I) _I))))` THEN
- CONJ_TAC THENL [MATCH_MP_TAC REDU_RATOR THEN MATCH_ACCEPT_TAC REDU_I; ALL_TAC] THEN
- MATCH_MP_TAC REDU_TRANS THEN
- EXISTS_TAC `(App (App (App _S (App _K f)) (App (App _S _I) _I)) (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
- CONJ_TAC THENL [MATCH_MP_TAC REDU_RAND THEN MATCH_ACCEPT_TAC REDU_I; ALL_TAC] THEN
- MATCH_MP_TAC REDU_TRANS THEN
- EXISTS_TAC `App (App (App _K f) (App (App _S (App _K f)) (App (App _S _I) _I))) (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
- CONJ_TAC THENL [MATCH_ACCEPT_TAC REDU_S; ALL_TAC] THEN
- MATCH_MP_TAC REDU_RATOR THEN
- MATCH_ACCEPT_TAC REDU_K);;
-let rmk1 = top_thm();;
+   ==> !f. REDU (M f) (App f (M f))`,
+  DISCH_THEN SUBST_VAR_TAC THEN REWRITE_TAC[] THEN GEN_TAC THEN
+  MATCH_MP_TAC REDU_TRANS THEN
+  EXISTS_TAC
+    `App (App _I (App (App _S (App _K f)) (App (App _S _I) _I)))
+         (App _I (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC REDU_S; ALL_TAC] THEN
+  MATCH_MP_TAC REDU_TRANS THEN
+  EXISTS_TAC
+    `App (App (App _S (App _K f)) (App (App _S _I) _I))
+         (App _I (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
+  CONJ_TAC THENL
+  [MATCH_MP_TAC REDU_RATOR THEN MATCH_ACCEPT_TAC REDU_I; ALL_TAC] THEN
+  MATCH_MP_TAC REDU_TRANS THEN
+  EXISTS_TAC
+    `App (App (App _S (App _K f)) (App (App _S _I) _I))
+         (App (App _S (App _K f)) (App (App _S _I) _I))` THEN
+  CONJ_TAC THENL
+  [MATCH_MP_TAC REDU_RAND THEN MATCH_ACCEPT_TAC REDU_I; ALL_TAC] THEN
+  MATCH_MP_TAC REDU_TRANS THEN
+  EXISTS_TAC
+    `App (App (App _K f) (App (App _S (App _K f)) (App (App _S _I) _I)))
+         (App (App (App _S _I) _I)
+              (App (App _S (App _K f)) (App (App _S _I) _I)))` THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC REDU_S; ALL_TAC] THEN
+  MATCH_MP_TAC REDU_RATOR THEN MATCH_ACCEPT_TAC REDU_K);;
 
 (* ------------------------------------------------------------------------- *)
 (* Remark 2: App Y f = M[f].                                                 *)
@@ -103,7 +114,6 @@ ee (RULE_SLV REDU_RAND);;
 ee (ACCEPT_SLV REDU_S);;
 ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
 ee (RULE_SLV REDU_RAND);;
-
 ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
 ee (RULE_SLV REDU_RAND);;
 ee (ACCEPT_SLV REDU_K);;
@@ -120,7 +130,7 @@ ee (TACTIC_SLV (REWRITE_TAC[REDU_REFL]));;
 let rmk2 = top_thm1();;
 
 (* ------------------------------------------------------------------------- *)
-(* Teorema: Y è il fixed-point combinator.  Usando rmk1 e rmk2.              *)
+(* Teorema: Y è il fixed-point combinator.  Usando YCOMB_LEMMA1 e rmk2.      *)
 (* ------------------------------------------------------------------------- *)
 
 g `!f. REDU (App YCOMB f) (App f (App YCOMB f))`;;
@@ -133,7 +143,7 @@ e (MATCH_MP_TAC (REWRITE_RULE [RIGHT_IMP_FORALL_THM] rmk2));;
 e (ASM_REWRITE_TAC[]);;
 e (TRANS_TAC REDU_TRANS `App f (M f)`);;
 e CONJ_TAC;;
-e (MATCH_MP_TAC (REWRITE_RULE [RIGHT_IMP_FORALL_THM] rmk1));;
+e (MATCH_MP_TAC (REWRITE_RULE [RIGHT_IMP_FORALL_THM] YCOMB_LEMMA1));;
 e (ASM_REWRITE_TAC[]);;
 e (MATCH_MP_TAC REDU_RAND);;
 e (MATCH_MP_TAC REDU_SYM);;
@@ -195,10 +205,10 @@ let SUPERSTEP_SLV : solver =
 (* Lemma: M[f] = f(M[f])                                                     *)
 (* ------------------------------------------------------------------------- *)
 
-gg `REDU
- (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)))
- (App f
- (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
+gg `REDU (App (App (App _S _I) _I)
+              (App (App _S (App _K f)) (App (App _S _I) _I)))
+         (App f (App (App (App _S _I) _I)
+                     (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
 ee (REPEAT_SLV SUPERSTEP_SLV);;
 top_thm1();;
 
@@ -206,10 +216,10 @@ top_thm1();;
 (* Funziona anche con MESON.                                                 *)
 (* ------------------------------------------------------------------------- *)
 
-g `REDU
- (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I)))
- (App f
- (App (App (App _S _I) _I) (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
+gg `REDU (App (App (App _S _I) _I)
+              (App (App _S (App _K f)) (App (App _S _I) _I)))
+         (App f (App (App (App _S _I) _I)
+                     (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
 e (MESON_TAC[REDU_RULES]);;
 top_thm();;
 

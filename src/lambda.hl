@@ -1,103 +1,183 @@
-let LAMBDA_INDUCT,LAMBDA_RECUR = define_type
-  "lambda = Ref num
-          | App lambda lambda
-          | Abs lambda
-          | Quote";;
+(* ========================================================================= *)
+(* Lambda calculus encoded with de Brujin indexes and SKI combinators.       *)
+(* ========================================================================= *)
+
+needs "Library/rstc.ml";;
+needs "ski.ml";;
+
+(* ------------------------------------------------------------------------- *)
+(* Miscellanea.                                                              *)
+(* ------------------------------------------------------------------------- *)
 
 let NTH = new_definition
-  `NTH i l x <=> i < LENGTH l /\ EL i l = x`;; 
+  `NTH i l (x:A) <=> i < LENGTH l /\ EL i l = x`;; 
 
-(*
-let BUMP = new_recursive_definition LAMBDA_RECUR
-  `(!k i. BUMP k (Ref i) = if i < k then Ref i else Ref (SUC i)) /\
-   (!k x y. BUMP k (App x y) =
-            if x = Quote then (App x y) else
-            App (BUMP k x) (BUMP k y)) /\
-   (!k x. BUMP k (Abs x) = Abs (BUMP (SUC k) x)) /\
-   (!k. BUMP k Quote = Quote`;;
-*)
+(* ------------------------------------------------------------------------- *)
+(* Lambda terms and substitution.                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let lambda_INDUCT,lambda_RECUR = define_type
+  "lambda = Ref num
+          | Comb lambda lambda
+          | Abs lambda";;
 
 let SHIFTENV = new_recursive_definition num_RECURSION
   `(!f. SHIFTENV f 0 = 0) /\
    (!f i. SHIFTENV f (SUC i) = SUC (f i))`;;
 
-let REINDEX = new_recursive_definition LAMBDA_RECUR
+let REINDEX = new_recursive_definition lambda_RECUR
   `(!f i. REINDEX f (Ref i) = Ref (f i)) /\
-   (!f x y. REINDEX f (App x y) =
-            if x = Quote then App x y else
-            App (REINDEX f x) (REINDEX f y)) /\
-   (!f x. REINDEX f (Abs x) = Abs (REINDEX (SHIFTENV f) x)) /\
-   (!f. REINDEX f Quote = Quote)`;;
-
-(* `BUMP x = REINDEX SUC x` *)
+   (!f x y. REINDEX f (Comb x y) = Comb (REINDEX f x) (REINDEX f y)) /\
+   (!f x. REINDEX f (Abs x) = Abs (REINDEX (SHIFTENV f) x))`;;
 
 let SHIFT = new_recursive_definition num_RECURSION
   `(!f. SHIFT f 0 = Ref 0) /\
    (!f i. SHIFT f (SUC i) = REINDEX SUC (f i))`;;
 
-let LAMBDASUBST = new_recursive_definition LAMBDA_RECUR
+let LAMBDASUBST = new_recursive_definition lambda_RECUR
   `(!f i. LAMBDASUBST f (Ref i) = f i) /\
-   (!f x y. LAMBDASUBST f (App x y) =
-            if x = Quote then App x y else
-            App (LAMBDASUBST f x) (LAMBDASUBST f y)) /\
-   (!f x. LAMBDASUBST f (Abs x) = Abs (LAMBDASUBST (SHIFT f) x)) /\
-   (!f. LAMBDASUBST f Quote = Quote)`;;
+   (!f x y. LAMBDASUBST f (Comb x y) =
+            Comb (LAMBDASUBST f x) (LAMBDASUBST f y)) /\
+   (!f x. LAMBDASUBST f (Abs x) = Abs (LAMBDASUBST (SHIFT f) x))`;;
 
-let GETENV_RULES,GETENV_INDUCT,GETENV_CASES = new_inductive_definition
-  `(!env x. GETENV 0 (CONS x env) x) /\
-   (!env x i y. GETENV i env y
-                ==> GETENV (SUC i) (CONS x env) (REINDEX SUC y))`;;
+(* ------------------------------------------------------------------------- *)
+(* Free variables.                                                           *)
+(* ------------------------------------------------------------------------- *)
 
-let GETENV_HEAD,GETENV_TAIL = CONJ_PAIR GETENV_RULES;;
+let FREEIN_RULES,FREEIN_INDUCT,FREEIN_CASES = new_inductive_definition
+  `(!i. FREEIN i (Ref i)) /\
+   (!i x y. FREEIN i x ==> FREEIN i (Comb x y)) /\
+   (!i x y. FREEIN i y ==> FREEIN i (Comb x y)) /\
+   (!i x. FREEIN (SUC i) x ==> FREEIN i (Abs x))`;;
 
-let EVAL_RULES,EVAL_INDUCT,EVAL_CASES = new_inductive_definition
-  `(!env i x. GETENV i env x ==> EVAL env (Ref i) x) /\
-   (!env x x' y y' z.
-      EVAL env x' (Abs x) /\ EVAL env y y' /\ EVAL (CONS y' env) x z
-      ==> EVAL env (App x' y) z) /\
-   (!env x. EVAL env (Abs x) (Abs x)) /\
-   (!env x y. EVAL env x Quote ==> EVAL env (App x y) y) /\
-   (!env. EVAL env Quote Quote)`;;
+let FREES = new_definition
+  `FREES x = {i | FREEIN i x}`;;
 
-let [EVAL_REF; EVAL_BETA; EVAL_ABS; EVAL_WALK; EVAL_QUOTE] = CONJUNCTS EVAL_RULES;;
+let FREES_REF = prove
+ (`!i. FREES (Ref i) = {i}`,
+  GEN_TAC THEN REWRITE_TAC[FREES] THEN ONCE_REWRITE_TAC[FREEIN_CASES] THEN
+  REWRITE_TAC[distinctness "lambda"; injectivity "lambda"] THEN SET_TAC[]);;
 
-(*
-(define quinec ’((lambda (x)
-(app x (app (app quote quote) x)))
- (app quote
- (lambda (x)
-(app x (app (app quote quote) x))))))
+let FREES_COMB = prove
+ (`!i x y. FREES (Comb x y) = FREES x UNION FREES y`,
+  REPEAT GEN_TAC THEN GEN_REWRITE_TAC LAND_CONV [FREES] THEN
+  ONCE_REWRITE_TAC[FREEIN_CASES] THEN
+  REWRITE_TAC[FREES; distinctness "lambda"; injectivity "lambda"] THEN
+  SET_TAC[]);;
+
+let FREES_ABS = prove
+ (`!i x. FREES (Abs x) = {i | SUC i IN FREES x}`,
+  REPEAT GEN_TAC THEN GEN_REWRITE_TAC LAND_CONV [FREES] THEN
+  ONCE_REWRITE_TAC[FREEIN_CASES] THEN
+  REWRITE_TAC[FREES; distinctness "lambda"; injectivity "lambda"] THEN
+  SET_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Beta-eta equivalence.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+let ETAREL_RULES,ETAREL_INDUCT,ETAREL_CASES = new_inductive_definition
+  `!x. ETAREL (Abs (Comb x (Ref 0))) x`;;
+
+let PUSHENV = new_recursive_definition num_RECURSION
+  `(!x. PUSHENV x 0 = x) /\
+   (!x n. PUSHENV x (SUC n) = Ref n)`;;
+
+let BETAREL_RULES,BETAREL_INDUCT,BETAREL_CASES = new_inductive_definition
+  `!x y. BETAREL (Comb (Abs x) y) (LAMBDASUBST (PUSHENV y) x)`;;
+
+let LAMBDACONGR_RULES,LAMBDACONGR_INDUCT,LAMBDACONGR_CASES =
+  new_inductive_definition
+  `(!i. LAMBDACONGR R (Ref i) (Ref i)) /\
+   (!x1 x2 y. LAMBDACONGR R x1 x2 ==> LAMBDACONGR R (Comb x1 y) (Comb x2 y)) /\
+   (!x y1 y2. LAMBDACONGR R y1 y2 ==> LAMBDACONGR R (Comb x y1) (Comb x y2)) /\
+   (!x y. LAMBDACONGR R x y ==> LAMBDACONGR R (Abs x) (Abs y)) /\
+   (!x y. R x y ==> LAMBDACONGR R x y)`;;
+
+let [LAMBDACONGR_REF; LAMBDACONGR_RATOR; LAMBDACONGR_RAND; LAMBDACONGR_BODY;
+     LAMBDACONGR_INC] =
+  CONJUNCTS (REWRITE_RULE[FORALL_AND_THM] LAMBDACONGR_RULES);;
+
+let LAMBDACONGR_REFL = prove
+ (`!R x. LAMBDACONGR R x x`,
+  GEN_TAC THEN MATCH_MP_TAC lambda_INDUCT THEN SIMP_TAC[LAMBDACONGR_RULES]);;
+
+let LAMBDAREL = new_definition
+  `LAMBDAREL = RTC (LAMBDACONGR (\x y. BETAREL x y \/ ETAREL x y))`;;
+
+let LAMBDAREL_REFL = prove
+ (`!x. LAMBDAREL x x`,
+  REWRITE_TAC[LAMBDAREL; RTC_REFL]);;
+
+let LAMBDAREL_TRANS = prove
+ (`!x y z. LAMBDAREL x y /\ LAMBDAREL y z ==> LAMBDAREL x z`,
+  REWRITE_TAC[LAMBDAREL; RTC_TRANS]);;
+
+let LANBDAREL_BETA = prove
+ (`!x y. BETAREL x y ==> LAMBDAREL x y`,
+  REWRITE_TAC[LAMBDAREL] THEN MESON_TAC[LAMBDACONGR_INC; RTC_INC]);;
+
+let LANBDAREL_ETA = prove
+ (`!x y. ETAREL x y ==> LAMBDAREL x y`,
+  REWRITE_TAC[LAMBDAREL] THEN MESON_TAC[LAMBDACONGR_INC; RTC_INC]);;
+
+let LAMBDAREL_RATOR = prove
+ (`!x1 x2 y. LAMBDAREL x1 x2 ==> LAMBDAREL (Comb x1 y) (Comb x2 y)`,
+  FIX_TAC "y" THEN REWRITE_TAC[LAMBDAREL] THEN MATCH_MP_TAC RTC_INDUCT THEN
+  CONJ_TAC THENL [SIMP_TAC[RTC_INC; LAMBDACONGR_RATOR]; ALL_TAC] THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC RTC_REFL; ALL_TAC] THEN
+  MESON_TAC[RTC_TRANS]);;
+
+let LAMBDAREL_RAND = prove
+ (`!x y1 y2. LAMBDAREL y1 y2 ==> LAMBDAREL (Comb x y1) (Comb x y2)`,
+  FIX_TAC "x" THEN REWRITE_TAC[LAMBDAREL] THEN MATCH_MP_TAC RTC_INDUCT THEN
+  CONJ_TAC THENL [SIMP_TAC[RTC_INC; LAMBDACONGR_RAND]; ALL_TAC] THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC RTC_REFL; ALL_TAC] THEN
+  MESON_TAC[RTC_TRANS]);;
+
+let LAMBDAREL_COMB = prove
+ (`!x1 x2 y1 y2. LAMBDAREL x1 x2 /\ LAMBDAREL y1 y2
+                 ==> LAMBDAREL (Comb x1 y1) (Comb x2 y2)`,
+  MESON_TAC[LAMBDAREL_RATOR; LAMBDAREL_RAND; LAMBDAREL_TRANS]);;
+
+let LAMBDAREL_BODY = prove
+ (`!x y. LAMBDAREL x y ==> LAMBDAREL (Abs x) (Abs y)`,
+  REWRITE_TAC[LAMBDAREL] THEN MATCH_MP_TAC RTC_INDUCT THEN
+  CONJ_TAC THENL [SIMP_TAC[RTC_INC; LAMBDACONGR_BODY]; ALL_TAC] THEN
+  CONJ_TAC THENL [MATCH_ACCEPT_TAC RTC_REFL; ALL_TAC] THEN
+  MESON_TAC[RTC_TRANS]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Lambda calculus <-> SKI translation.                                      *)
+(* ------------------------------------------------------------------------- *)
+
+let LAMBDAOFSKI = new_recursive_definition ski_RECUR
+  `LAMBDAOFSKI _I = Abs (Ref 0) /\
+   LAMBDAOFSKI _K = Abs (Abs (Ref 1)) /\
+   LAMBDAOFSKI _S = Abs (Abs (Abs (Comb (Comb (Ref 2) (Ref 0))
+                            (Comb (Ref 1) (Ref 0))))) /\
+   (!x y. LAMBDAOFSKI (App x y) = Comb (LAMBDAOFSKI x) (LAMBDAOFSKI y))`;;
+
+let SKICONVERT = new_definition
+  `SKICONVERT x y <=> (!z. LAMBDAREL (Comb x z) (Comb (LAMBDAOFSKI y) z))`;;
+
+(* E' vero?  Come si dimostra? *)
+(* 
+let LAMBDAREL_COMB_EXTENS = prove
+ (`!x1 x2 y1 y2.
+     (!z. LAMBDAREL (Comb x1 z) (Comb x2 z)) /\
+     (!z. LAMBDAREL (Comb y1 z) (Comb y2 z))
+     ==> !z. LAMBDAREL (Comb (Comb x1 y1) z) (Comb (Comb x2 y2) z)`,
 *)
 
-g `let w = Abs (App (Ref 0) (App (App Quote Quote) (Ref 0))) in
-   let q = (App w (App Quote w)) in
-   EVAL [] q q`;;
-
-LET_TAC THEN POP_ASSUM SUBST_VAR_TAC THEN
-LET_TAC THEN POP_ASSUM SUBST_VAR_TAC THEN
-MATCH_MP_TAC EVAL_BETA THEN
-EXISTS_TAC `App (Ref 0) (App (App Quote Quote) (Ref 0))` THEN
-EXISTS_TAC `Abs (App (Ref 0) (App (App Quote Quote) (Ref 0)))` THEN
-CONJ_TAC THENL [MATCH_ACCEPT_TAC EVAL_ABS; ALL_TAC] THEN
-CONJ_TAC THENL [MATCH_MP_TAC EVAL_WALK THEN MATCH_ACCEPT_TAC EVAL_QUOTE; ALL_TAC] THEN
-MATCH_MP_TAC EVAL_BETA THEN
-EXISTS_TAC `App (Ref 0) (App (App Quote Quote) (Ref 0))` THEN
-EXISTS_TAC `Ref 0` THEN
-CONJ_TAC THENL
-[MATCH_MP_TAC EVAL_REF THEN
- MATCH_ACCEPT_TAC GETENV_HEAD;
- ALL_TAC] THEN
-CONJ_TAC THENL
-[MATCH_MP_TAC EVAL_WALK THEN MATCH_MP_TAC EVAL_WALK THEN
- MATCH_ACCEPT_TAC EVAL_QUOTE;
- ALL_TAC] THEN
-
-MATCH_MP_TAC EVAL_BETA THEN
-EXISTS_TAC `App (Ref 0) (App (App Quote Quote) (Ref 0))` THEN
-
-EXISTS_TAC `Ref 0` THEN
-
-EXISTS_TAC `Abs (App (Ref 0) (App (App Quote Quote) (Ref 0)))` THEN
-CONJ_TAC THENL
- MATCH_MP_TAC EVAL_REF THEN
- MATCH_ACCEPT_TAC GETENV_HEAD THEN
+(* Regola di traduzione SKI->Lambda per Comb. *)
+(*
+let SKICONVERT_COMB = prove
+ (`!x x' y y'.
+     SKICONVERT x x' /\ SKICONVERT y y'
+     ==> SKICONVERT (Comb x y) (App x' y')`,
+  REWRITE_TAC[SKICONVERT; LAMBDAOFSKI] THEN REPEAT STRIP_TAC THEN
+  MATCH_MP_TAC LAMBDAREL_RATOR THEN
+  MATCH_MP_TAC LAMBDAREL_COMB
+  ASM_REWRITE_TAC
+*)  
