@@ -1,52 +1,15 @@
 (* ------------------------------------------------------------------------- *)
-(* First order unification (no type instantiation -- yet).                   *)
-(* (Copied from drule.ml.)                                                   *)
+(* Unification for types.                                                    *)
+(* Not needed anymore, an implementation by Michael Faerber is now           *)
+(* available in HOL Light                                                    *)
 (* ------------------------------------------------------------------------- *)
 
 (*
-let (term_unify:term list -> term -> term -> instantiation) =
-  let augment1 sofar (s,x) =
-    let s' = subst sofar s in
-    if vfree_in x s && not (s = x) then failwith "augment_insts"
-    else (s',x) in
-  let raw_augment_insts p insts =
-    p::(map (augment1 [p]) insts) in
-  let augment_insts(t,v) insts =
-    let t' = vsubst insts t in
-    if t' = v then insts
-    else if vfree_in v t' then failwith "augment_insts"
-    else raw_augment_insts (t',v) insts in
-  let rec unify vars tm1 tm2 sofar =
-    if tm1 = tm2 then sofar
-    else if is_var tm1 && mem tm1 vars then
-      try let tm1' = rev_assoc tm1 sofar in
-          unify vars tm1' tm2 sofar
-      with Failure "find" ->
-          augment_insts (tm2,tm1) sofar
-    else if is_var tm2 && mem tm2 vars then
-       try let tm2' = rev_assoc tm2 sofar in
-          unify vars tm1 tm2' sofar
-      with Failure "find" ->
-          augment_insts (tm1,tm2) sofar
-    else if is_abs tm1 then
-      let tm1' = body tm1
-      and tm2' = subst [bndvar tm1,bndvar tm2] (body tm2) in
-      unify vars tm1' tm2' sofar
-    else
-      let l1,r1 = dest_comb tm1
-      and l2,r2 = dest_comb tm2 in
-      unify vars l1 l2 (unify vars r1 r2 sofar) in
-  fun vars tm1 tm2 -> [],unify vars tm1 tm2 [],[];;
-*)
-
-(* ------------------------------------------------------------------------- *)
-(* Unification for types.                                                    *)
-(* ------------------------------------------------------------------------- *)
-
 let tunify : hol_type -> hol_type -> (hol_type * hol_type) list
              -> (hol_type * hol_type) list =
   let augment1 sofar (s,x) =
     let s' = type_subst sofar s in
+    (* ACHTUNG! s -> s' ???? *)
     if mem x (tyvars s) && not (s = x) then failwith "augment_tyinsts"
     else (s',x) in
   let raw_augment_tyinsts p tyinsts =
@@ -75,12 +38,13 @@ let tunify : hol_type -> hol_type -> (hol_type * hol_type) list
 
 let type_unify : hol_type -> hol_type -> (hol_type * hol_type) list =
   fun ty1 ty2 -> tunify ty1 ty2 [];;
+*)
 
 let rec type_term_unify : term -> term ->
      (hol_type * hol_type) list -> (hol_type * hol_type) list =
   fun tm1 tm2 sofar ->
     if is_var tm1 || is_const tm1 || is_var tm2 || is_const tm2 then
-      tunify (type_of tm1) (type_of tm2) sofar
+      type_unify (type_of tm1) (type_of tm2) sofar
     else if is_abs tm1 then
       type_term_unify (body tm1) (body tm2)
         (type_term_unify (bndvar tm1) (bndvar tm2) sofar)
@@ -102,11 +66,11 @@ let term_ty_unify : term list -> term -> term -> instantiation =
   fun vars tm1 tm2 ->
     let tyin0 = type_term_unify tm1 tm2 [] in
     let tyin1 =
-      itlist (fun (v1,v2) tyin -> tunify (type_of v1) (type_of v2) tyin)
+      itlist (fun (v1,v2) tyin -> type_unify (type_of v1) (type_of v2) tyin)
              (mk_vars_eqs vars (frees tm1))
              tyin0 in
     let tyin =
-      itlist (fun (v1,v2) tyin -> tunify (type_of v1) (type_of v2) tyin)
+      itlist (fun (v1,v2) tyin -> type_unify (type_of v1) (type_of v2) tyin)
              (mk_vars_eqs vars (frees tm2))
              tyin1 in
     let finst = inst tyin in
@@ -124,16 +88,16 @@ let term_ty_unify : term list -> term -> term -> instantiation =
 
 (* type_unifty *)
 ;;
-type_unify `:A` `:B`;;
-type_unify `:A` `:A`;;
-type_unify `:A` `:A list`;;
-type_unify `:A` `:B list`;;
-type_unify `:A list` `:A`;;
-type_unify `:B list` `:A`;;
-type_unify `:A#B` `:A list`;;
-type_unify `:A list` `:A#B`;;
-type_unify `:B list # A` `:A#B`;;
-type_unify `:B list # A` `:C#C`;;
+type_unify `:A` `:B` [];;
+type_unify `:A` `:A` [];;
+type_unify `:A` `:A list` [];;
+type_unify `:A` `:B list` [];;
+type_unify `:A list` `:A` [];;
+type_unify `:B list` `:A` [];;
+type_unify `:A#B` `:A list` [];;
+type_unify `:A list` `:A#B` [];;
+type_unify `:B list # A` `:A#B` [];;
+type_unify `:B list # A` `:C#C` [];;
 
 (* term_ty_unify *)
 term_ty_unify [`x:A`] `x:A` `x:A`;;
