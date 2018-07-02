@@ -45,25 +45,27 @@ bb();;
 ee (APPLY_SLV LOCK_RULE2);;
 bb();;
 ee (APPLY_SLV LOCK_RULE2');;
-ee CONJ_SLV;;
+tt CONJ_TAC;;
 ee (APPLY_SLV LOCK_RULE1);;
 ee (APPLY_SLV CONS_EQ_APPEND);;
-ee CONJ_SLV;;
+tt CONJ_TAC;;
 ee REFL_SLV;;
 ee (APPLY_SLV REFL_APPEND_NIL);;
 top_thm1();;
 
 let STEP_SLV : solver =
   COLLECT_SLV
-    [CONJ_SLV;
+    [TACTIC_SLV CONJ_TAC;
      REFL_SLV;
      ACCEPT_SLV LOCK_RULE1;
      RULE_SLV LOCK_RULE2';
      ACCEPT_SLV REFL_APPEND_NIL;
      RULE_SLV CONS_EQ_APPEND];;
 
+(* TODO: Meglio usare REPEAT_SLV ? *)
 let rec SEARCH_SLV : solver =
-  fun g -> CONCAT_SLV ALL_SLV (THEN_SLV STEP_SLV SEARCH_SLV) g;;
+  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
+                      (THEN_SLV STEP_SLV SEARCH_SLV) g;;
 
 gg `??x. LOCK x x`;;
 ee SEARCH_SLV;;

@@ -30,15 +30,15 @@ print_endline "Fine test: REFL_SLV";;
 
 print_endline "Inizio test: THEN_SLV";;
 
-let [i,th] = take 10 (solve (THEN_SLV CONJ_SLV REFL_SLV)
+let [i,th] = take 10 (solve (THEN_SLV (TACTIC_SLV CONJ_TAC) REFL_SLV)
                          `??m n. m + n = n + m /\ n + n = n + 1`) in
 assert (i = ([], [(`1`, `n:num`); (`1`, `m:num`)], []));
 assert (concl th = `1 + 1 = 1 + 1 /\ 1 + 1 = 1 + 1`);;
 
-take 10 (solve (THENL_SLV CONJ_SLV [ACCEPT_SLV ADD_SYM; REFL_SLV])
+take 10 (solve (THENL_SLV (TACTIC_SLV CONJ_TAC) [ACCEPT_SLV ADD_SYM; REFL_SLV])
   `??m n. m + n = n + m /\ n + n = n + 1`);;
 
-take 10 (solve (THENL_SLV CONJ_SLV [REFL_SLV; ACCEPT_SLV ADD_SYM])
+take 10 (solve (THENL_SLV (TACTIC_SLV CONJ_TAC) [REFL_SLV; ACCEPT_SLV ADD_SYM])
   `??m n. m + n = n + m /\ n + n = n + 1`);;
 
 let [i,th] =
@@ -55,7 +55,7 @@ print_endline "Fine test: THEN_SLV";;
 (* ------------------------------------------------------------------------- *)
 
 gg `??x. x + 1 = 2 /\ x = 1`;;
-ee CONJ_SLV;;
+tt CONJ_TAC;;
 ee (META_EXISTS_SLV `x:num` [] `1`);;
 ee (TACTIC_SLV ARITH_TAC);;
 ee REFL_SLV;;

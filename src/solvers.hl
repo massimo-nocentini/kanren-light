@@ -12,6 +12,8 @@ type solver = mgoal -> goalstate stream;;
 
 type thm_solver = thm -> solver;;
 
+type thm_hosolver = thm_solver -> thm_solver;;
+
 (* ------------------------------------------------------------------------- *)
 (* Meta goals.                                                               *)
 (* ------------------------------------------------------------------------- *)
@@ -53,10 +55,12 @@ let wrapup : goalstate -> (term list * instantiation) * thm  =
     let th = just null_inst [] in
     metas,th;;
 
-let solve : solver -> term -> (instantiation * thm) stream =
+let solve : solver -> term -> (term list * thm) stream =
   let run_solver g slv = stream_mapfilter wrapup (slv g) in
+  let mk_eq i v = mk_eq(v,instantiate i v) in
   fun slv tm ->
-    let p ((mvs',inst),th) = inst,th in
+    let g = dest_mgoal tm in
+    let p ((_,inst),th) = map (mk_eq inst) (fst g),th in
     stream_map p (run_solver (dest_mgoal tm) slv);;
 
 (* ------------------------------------------------------------------------- *)
@@ -153,15 +157,15 @@ let THM_TACTIC_SLV (ttac:thm_tactic) : thm_solver =
   fun th -> try let tac = ttac th in TACTIC_SLV tac
             with Failure _ -> NO_SLV;;
 
-let ALL_SLV = TACTIC_SLV ALL_TAC;;
-let CONJ_SLV = TACTIC_SLV CONJ_TAC;;
-let CONTR_SLV = THM_TACTIC_SLV CONTR_TAC;;
-let CONV_SLV conv = TACTIC_SLV (CONV_TAC conv);;
-let DISCH_SLV = TACTIC_SLV DISCH_TAC;;
-let DISJ1_SLV = TACTIC_SLV DISJ1_TAC;;
-let DISJ2_SLV = TACTIC_SLV DISJ2_TAC;;
-let EQ_SLV = TACTIC_SLV EQ_TAC;;
-let GEN_SLV = TACTIC_SLV GEN_TAC;;
+(* let ALL_SLV = TACTIC_SLV ALL_TAC;; *)
+(* let CONJ_SLV = TACTIC_SLV CONJ_TAC;; *)
+(* let CONTR_SLV = THM_TACTIC_SLV CONTR_TAC;; *)
+(* let CONV_SLV conv = TACTIC_SLV (CONV_TAC conv);; *)
+(* let DISCH_SLV = TACTIC_SLV DISCH_TAC;; *)
+(* let DISJ1_SLV = TACTIC_SLV DISJ1_TAC;; *)
+(* let DISJ2_SLV = TACTIC_SLV DISJ2_TAC;; *)
+(* let EQ_SLV = TACTIC_SLV EQ_TAC;; *)
+(* let GEN_SLV = TACTIC_SLV GEN_TAC;; *)
 
 (* ------------------------------------------------------------------------- *)
 (* Further basic solvers.                                                    *)
@@ -178,7 +182,7 @@ let UNDISCH_THEN_SLV : term -> thm_solver -> solver =
 
 let META_EXISTS_SLV : term -> term list -> term -> solver =
   fun v cvs t ->
-    SOLVER (fun mvs (asl,w) as gl ->
+    SOLVER (fun mvs (asl,w) ->
       if not (mem v mvs) then fail() else
       let mvs' = subtract (frees t) cvs in
       let vsubs = [t,v] in
@@ -302,19 +306,18 @@ let ss () =
   current_mgoalstack := gs :: !current_mgoalstack;
   !current_mgoalstack;;
 
-let top_thms() : thm stream =
-  let s::_ = !current_mgoalstack in
-  let f ((mvs,i),gl,j) =
-    if gl = [] then singleton (j i []) else Empty in
-  bind s f;;
+let tt : tactic -> mgoalstack =
+  fun tac -> ee (TACTIC_SLV tac);;
 
-(* This version do not filter incomplete solutions. *)
-(*
-let top_thm1() : thm =
-  let s::_ = !current_mgoalstack in
-  let ((mvs,i),[],f) = get s in
-  f i [];;
-*)
+let top_thms : unit -> thm stream =
+  (*
+  let mk_eq i v = mk_eq(v,instantiate i v) in
+  let p ((mvs,inst),th) = map (mk_eq inst) mvs,th in
+  *)
+  fun () ->
+    match !current_mgoalstack with
+      [] -> failwith "top_thms: Goalstack empty"
+    | s :: _ -> stream_mapfilter (snd o wrapup) s;;
 
 let top_thm1() : thm =
   get (top_thms());;
@@ -349,7 +352,7 @@ let (print_mgoalstack:mgoalstack->unit) =
 (* ------------------------------------------------------------------------- *)
 
 let EVERY_SLV slvl =
-  itlist THEN_SLV slvl ALL_SLV;;
+  itlist THEN_SLV slvl (TACTIC_SLV ALL_TAC);;
 
 let MAP_EVERY_SLV slvf lst =
   EVERY_SLV (map slvf lst);;
@@ -358,16 +361,21 @@ let MAP_EVERY_SLV slvf lst =
 (* Solvers to augment assumption list.                                       *)
 (* ------------------------------------------------------------------------- *)
 
+(*
 let (LABEL_SLV: string -> thm_solver) =
   fun s th -> TACTIC_SLV (LABEL_TAC s th);;
+*)
 
+(*
 let ASSUME_SLV : thm_solver =
   fun th -> TACTIC_SLV (ASSUME_TAC th);;
+*)
 
 (* ------------------------------------------------------------------------- *)
 (* Manipulation of assumption list.                                          *)
 (* ------------------------------------------------------------------------- *)
 
+(* Tradisce lo spirito.  Rivedere. *)
 let FIND_ASSUM_SLV : thm_solver -> term -> solver =
   fun tslv t (_,(asl,_) as g) ->
     tslv(snd(find (fun (_,th) -> concl th = t) asl)) g;;
@@ -389,8 +397,10 @@ let EVERY_ASSUM_SLV : thm_solver -> solver =
 
 let RULE_ASSUM_SLV : (thm -> thm) -> solver =
   fun rule (_,(asl,_) as g) ->
-    THEN_SLV (POP_ASSUM_LIST_SLV(K ALL_SLV))
-             (MAP_EVERY_SLV (fun (s,th) -> LABEL_SLV s (rule th)) (rev asl))
+    THEN_SLV (POP_ASSUM_LIST_SLV(K (TACTIC_SLV ALL_TAC)))
+             (MAP_EVERY_SLV
+                (fun (s,th) -> TACTIC_SLV (LABEL_TAC s (rule th)))
+                (rev asl))
              g;;
 
 (* ------------------------------------------------------------------------- *)
@@ -466,12 +476,12 @@ let COLLECT_X_ASSUM_SLV (tslv:thm_solver) : solver =
   COLLECT_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
 
 (* Serve?  Serve la versione con mplusf? *)
-let TRY_SLV slv =
-  CONCAT_SLV slv ALL_SLV;;
+let MAYBE_SLV slv =
+  CONCAT_SLV slv (TACTIC_SLV ALL_TAC);;
 
 (* Serve?  Serve la versione con mplusf? *)
-let rec REPEAT_SLV slv g =
-  (CONCAT_SLV (THEN_SLV slv (REPEAT_SLV slv)) ALL_SLV) g;;
+let rec COLIM_SLV slv g =
+  (CONCAT_SLV (THEN_SLV slv (COLIM_SLV slv)) (TACTIC_SLV ALL_TAC)) g;;
 
 (* Serve?  Serve la versione con mplusf? *)
 let APPLY_SLV : thm_solver =
@@ -605,7 +615,7 @@ gg `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
            padre a b
            ?- nonno a x`;;
 ee (RULE_SLV (ASSUME `!x y z. padre x y /\ padre y z ==> nonno x z`));;
-ee CONJ_SLV;;
+tt CONJ_TAC;;
 ee (ACCEPT_SLV (ASSUME `padre (a:A) (c:A) : bool`));;
 ee (ACCEPT_SLV (ASSUME `padre (c:A) (d:A) : bool`));;
 top_thm1();;

@@ -5,7 +5,7 @@
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
-(* Solver for intuitionistic logic ITAUT_SLV.                                *) 
+(* Solver for intuitionistic logic ITAUT_SLV.                                *)
 (* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
@@ -69,7 +69,8 @@ let META_SPEC_SLV : thm_solver =
     let gv = genvar(type_of(fst(dest_forall(concl th)))) in
     (ASSUME_TAC th THEN META_SPEC_TAC gv th) g);;
 
-let DISJ_SLV : solver = CONCAT_SLV DISJ1_SLV DISJ2_SLV;;
+let DISJ_SLV : solver =
+  CONCAT_SLV (TACTIC_SLV DISJ1_TAC) (TACTIC_SLV DISJ2_TAC);;
 
 let X_META_EXISTS_SLV : solver =
   TACTIC_SLV (fun asl,w as g ->
@@ -84,7 +85,7 @@ let ASM_ANT_SLV = THM_TACTIC_SLV ASM_ANT_TAC;;
 
 let ITAUT0_SLV =
   COLLECT_SLV [UNIFY_ACCEPT_SLV TRUTH;
-               COLLECT_ASSUM_SLV CONTR_SLV;
+               COLLECT_ASSUM_SLV (TACTIC_SLV CONTR_TAC);
                COLLECT_ASSUM_SLV UNIFY_ACCEPT_SLV];;
 
 let CLARIFY_TAC : tactic =
@@ -109,8 +110,8 @@ let rec ITAUT_SLV n pg : solver =
        (if n >= 2
         then THEN_SLV (COLLECT_ASSUM_SLV META_SPEC_SLV) (ITAUT_SLV (n-2) g)
         else (warn !debug_itaut_slv "Too deep!"; NO_SLV));
-       THEN_SLV DISJ1_SLV (ITAUT_SLV n g);
-       THEN_SLV DISJ2_SLV (ITAUT_SLV n g);
+       THEN_SLV (TACTIC_SLV DISJ1_TAC) (ITAUT_SLV n g);
+       THEN_SLV (TACTIC_SLV DISJ2_TAC) (ITAUT_SLV n g);
        (if n >= 2
         then (THEN_SLV X_META_EXISTS_SLV (ITAUT_SLV (n-2) g))
         else (warn !debug_itaut_slv "Too deep!"; NO_SLV));
@@ -129,14 +130,23 @@ let gstate::_ = take 1 (ITAUT_SLV ([],([],`F ==> a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([`a:bool`],([],`a:bool`)));;
+(* Diverge.
 let [] = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
+*)
 take 100 (ITAUT_SLV ([`a:bool`],([],`~ ~a ==> a`)));;
 (* Perche' da' come unica suluzione a = T *)
-map wrapup it;;
 
+(* Errore.
 map wrapup (take 20 (ITAUT_SLV ([`a:bool`],([],`a /\ b ==> b /\ a`))));;
+*)
 
 take 10 (stream_map wrapup (ITAUT_SLV ([`a:bool`],(["",ASSUME `F`],`a:bool`))));;
+
+
+gg `??a b. a ==> b`;;
+ee ITAUT_SLV;;
+take 100 (top_thms());;
+
 
 time ITAUT_TAC ([],
  `(~input_a ==> (internal <=> T)) /\
@@ -155,6 +165,7 @@ let gstate :: _ = time (take 1 o ITAUT_SLV)
   ==> ~(input_a \/ input_b)`));;
 wrapup gstate;;
 
+(*
 let gstate :: _ = time (take 1 o THEN_SLV (TACTIC_SLV(PURE_REWRITE_TAC[MESON[] `~p <=> (p  ==> F)`])) (fun g -> ITAUT_SLV g))
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
@@ -164,6 +175,7 @@ let gstate :: _ = time (take 1 o THEN_SLV (TACTIC_SLV(PURE_REWRITE_TAC[MESON[] `
   ~input_a /\ ~input_b
   ==> output`));;
 wrapup gstate;;
+*)
 
 time (take 1 o ITAUT_SLV)
 ([],([],
@@ -186,6 +198,7 @@ time (take 1 o ITAUT_SLV)
   ~input_a /\ ~input_b
   ==> output`));;
 
+(* Diverge:
 time (take 1 o ITAUT_SLV)
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
@@ -198,6 +211,7 @@ time (take 1 o ITAUT_SLV)
   (output <=> internal) /\
   ~input_a /\ ~input_b
   ==> output`));;
+*)
 
 time (take 1 o ITAUT_SLV)
 ([],([],
@@ -206,6 +220,7 @@ time (take 1 o ITAUT_SLV)
   ~input_a /\ ~input_b
   ==> output`));;
 
+(*
 time (take 1 o ITAUT_SLV)
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
@@ -213,7 +228,9 @@ time (take 1 o ITAUT_SLV)
   (input_a ==> (output <=> F)) /\
   (input_b ==> (output <=> F))
   ==> (output <=> ~(input_a \/ input_b))`));;
+*)
 
+(*
 time TAUT
 `(i1 /\ i2 <=> a) /\
  (i1 /\ i3 <=> b) /\
@@ -242,7 +259,9 @@ time TAUT
  (g \/ k <=> o2) /\
  (f \/ j <=> o3)
  ==> (o1 <=> ~i1) /\ (o2 <=> ~i2) /\ (o3 <=> ~i3)`;;
+*)
 
+(*
 time (take 1 o ITAUT_SLV)
 ([],([],
  `(i1 /\ i2 <=> a) /\
@@ -272,3 +291,4 @@ time (take 1 o ITAUT_SLV)
  (g \/ k <=> o2) /\
  (f \/ j <=> o3)
  ==> (o1 <=> ~i1) /\ (o2 <=> ~i2) /\ (o3 <=> ~i3)`));;
+*)

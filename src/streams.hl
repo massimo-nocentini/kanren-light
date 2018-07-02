@@ -40,6 +40,11 @@ let rec take (n:int) : 'a stream -> 'a list =
   | Cons(x,f) when n > 0 -> x :: if n = 1 then [] else take (n-1) (f())
   | _ -> [];;
 
+let rec list_of_stream (s : 'a stream) : 'a list =
+  match s with
+    Empty -> []
+  | Cons(x,f) -> x :: list_of_stream (f ());;
+
 let rec stream_map (f : 'a -> 'b) (s : 'a stream) : 'b stream =
   match s with
     Empty -> Empty

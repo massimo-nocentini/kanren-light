@@ -39,12 +39,12 @@ let rec ALL2_SLV (slv:solver) : solver =
   fun g ->
     CONCAT_SLV (ACCEPT_SLV ALL2_NIL)
                (THEN_SLV (RULE_SLV ALL2_CONS)
-                         (THENL_SLV CONJ_SLV [slv; ALL2_SLV slv]))
+                         (THENL_SLV (TACTIC_SLV CONJ_TAC) [slv; ALL2_SLV slv]))
                g;;
 
 let STEP_SLV : solver =
   COLLECT_SLV
-    [CONJ_SLV;
+    [TACTIC_SLV CONJ_TAC;
      ACCEPT_SLV EVAL_QUOTED;
      THEN_SLV (RULE_SLV EVAL_SYMB) RELASSOC_SLV;
      ACCEPT_SLV EVAL_LAMBDA;
@@ -53,10 +53,34 @@ let STEP_SLV : solver =
      ACCEPT_SLV ALL2_NIL;
      RULE_SLV ALL2_CONS];;
 
+(* TODO: Meglio usare REPEAT_SLV ? *)
 let rec EVAL_SLV : solver =
-  fun g ->
-    CONCAT_SLV ALL_SLV (THEN_SLV STEP_SLV EVAL_SLV) g;;
+  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV STEP_SLV EVAL_SLV) g;;
 
+(* Perche' questo non converge?!! *)
+(*
+let rec EVAL_SLV : solver = COLIM_SLV STEP_SLV;;
+*)
+
+take 1 (solve EVAL_SLV
+  `??ret. EVAL ['(list y), "x"] '(list x) ret`);;
+
+get (solve EVAL_SLV
+  `??ret. EVAL [] '((lambda (x) (list x x x)) (list)) ret`);;
+
+(* About 0s *)
+time (take 1) (solve EVAL_SLV `??q. EVAL [] q q`);;
+
+(* About 12s *)
+time (take 2) (solve EVAL_SLV `??q. EVAL [] q q`);;
+
+(* About 60s *)
+let sols = time (take 3) (solve EVAL_SLV `??q. EVAL [] q q`);;
+let [i1,s1; i2,s2; i3, s3] = sols;;
+vsubst [`"x"`,hd (frees (rand (hd i2)))] (hd i2);;
+vsubst [`"x"`,hd (frees (rand (hd i3)))] (hd i3);;
+
+(* Interactive version. *)
 gg `??q. EVAL [] q q`;;
 ee EVAL_SLV;;
 ss();;
@@ -93,7 +117,7 @@ let mygoal = (vsubst [quine,`q:sexp`] `EVAL [] q q`);;
 
 gg mygoal;;
 ee (APPLY_SLV EVAL_APP);;
-ee CONJ_SLV;;
+tt CONJ_TAC;;
 ee (PROLOG_SLV NO_CONV [EVAL_RULES; ALL2_RULES; RELASSOC_RULES]);;
 top_thm1();;
 
@@ -103,7 +127,7 @@ let EVAL_SLV : solver =
     s ++ map EVAL_SLV s;;
 
 let EVAL_SLV : solver =
-  REPEAT_SLV
+  COLIM_SLV
     STEP_SLV
 
 
@@ -128,11 +152,11 @@ gg `??q. EVAL [] q q`;;
 ee (APPLY_SLV EVAL_APP);;
 
   (* 1/3 *)
-  ee CONJ_SLV;;
+  tt CONJ_TAC;;
   ee (APPLY_SLV EVAL_LAMBDA);;
 
   (* 2/3 *)
-  ee CONJ_SLV;;
+  tt CONJ_TAC;;
   ee (APPLY_SLV EVAL_QUOTED);;
 
   (* 3/3 *)
@@ -140,7 +164,7 @@ ee (APPLY_SLV EVAL_APP);;
   ee (APPLY_SLV ALL2_CONS);;
 
     (* 1/2 *)
-    ee CONJ_SLV;;
+    tt CONJ_TAC;;
     ee (APPLY_SLV EVAL_SYMB);;
     ee (APPLY_SLV RELASSOC_HEAD);;
 
@@ -148,19 +172,19 @@ ee (APPLY_SLV EVAL_APP);;
     ee (APPLY_SLV ALL2_CONS);;
 
       (* 1/2 *)
-      ee CONJ_SLV;;
+      tt CONJ_TAC;;
       ee (APPLY_SLV EVAL_LIST);;
       ee (APPLY_SLV ALL2_CONS);;
 
         (* 1/2 *)
-        ee CONJ_SLV;;
+        tt CONJ_TAC;;
         ee (APPLY_SLV EVAL_QUOTED);;
 
         (* 2/2 *)
         ee (APPLY_SLV ALL2_CONS);;
 
           (* 1/2 *)
-          ee CONJ_SLV;;
+          tt CONJ_TAC;;
           ee (APPLY_SLV EVAL_SYMB);;
           ee (APPLY_SLV RELASSOC_HEAD);;
 
@@ -180,11 +204,11 @@ gg `??q. EVAL [] q q`;;
 ee (APPLY_SLV EVAL_APP);;
 
   (* 1/3 *)
-  ee CONJ_SLV;;
+  tt CONJ_TAC;;
   ee (PROLOG_SLV NO_CONV [EVAL_LAMBDA]);;
 
   (* 2/3 *)
-  ee CONJ_SLV;;
+  tt CONJ_TAC;;
   ee (PROLOG_SLV NO_CONV
         [ALL2_RULES; EVAL_QUOTED; EVAL_SYMB; EVAL_LIST; RELASSOC_HEAD]);;
 

@@ -9,11 +9,11 @@
 (* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
-(* Versione alternativa di prova di REPEAT_SLV.                              *)
+(* Versione alternativa di prova di COLIM_SLV.                              *)
 (* ------------------------------------------------------------------------- *)
 
 let rec REPEAT2_SLV (slv : solver) : solver =
-  fun g -> CONCAT_SLV ALL_SLV (THEN_SLV slv (REPEAT2_SLV slv)) g ;;
+  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV slv (REPEAT2_SLV slv)) g ;;
 
 (* ------------------------------------------------------------------------- *)
 (* Definizione dei combinatori SKI e della riduzione.                        *)
@@ -107,26 +107,26 @@ let YCOMB_LEMMA1 = prove
 gg `(M = \f. App (App (App _S _I) _I)
                  (App (App _S (App _K f)) (App (App _S _I) _I)))
     ==> !f. REDU (App YCOMB f) (M f)`;;
-ee DISCH_SLV;;
-ee GEN_SLV;;
+tt DISCH_TAC;;
+tt GEN_TAC;;
 ee (TACTIC_SLV (REWRITE_TAC[YCOMB]));;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (ACCEPT_SLV REDU_S);;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (RULE_SLV REDU_RATOR);;
 ee (ACCEPT_SLV REDU_K);;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (RULE_SLV REDU_RAND);;
 ee (ACCEPT_SLV REDU_S);;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (RULE_SLV REDU_RAND);;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (RULE_SLV REDU_RAND);;
 ee (ACCEPT_SLV REDU_K);;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (RULE_SLV REDU_RATOR);;
 ee (ACCEPT_SLV REDU_S);;
-ee (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV);;
+ee (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC));;
 ee (RULE_SLV REDU_RATOR);;
 ee (RULE_SLV REDU_RATOR);;
 ee (ACCEPT_SLV REDU_K);;
@@ -167,7 +167,7 @@ let YCOMB_FIX = top_thm();;
 
 let STEP_SLV : solver =
   COLLECT_SLV
-    [CONJ_SLV;
+    [TACTIC_SLV CONJ_TAC;
      ACCEPT_SLV REDU_I;
      ACCEPT_SLV REDU_K;
      ACCEPT_SLV REDU_S;
@@ -177,8 +177,9 @@ let STEP_SLV : solver =
      RULE_SLV REDU_RATOR;
      RULE_SLV REDU_TRANS];;
 
+(* TODO: Meglio usare REPEAT_SLV ? *)
 let rec REDU_SLV : solver =
-  fun g -> CONCAT_SLV ALL_SLV (THEN_SLV STEP_SLV REDU_SLV) g;;
+  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV STEP_SLV REDU_SLV) g;;
 
 (* ------------------------------------------------------------------------- *)
 (* Nuova stragegia.  Fare prima I e K e sennò S (in profondità).             *)
@@ -199,8 +200,8 @@ let STEP0_SLV : solver =
 let SUPERSTEP_SLV : solver =
   CONCAT_SLV
     (ACCEPT_SLV REDU_REFL)
-    (THENL_SLV (THEN_SLV (RULE_SLV REDU_TRANS) CONJ_SLV) 
-               [STEP0_SLV; ALL_SLV]);;
+    (THENL_SLV (THEN_SLV (RULE_SLV REDU_TRANS) (TACTIC_SLV CONJ_TAC)) 
+               [STEP0_SLV; TACTIC_SLV ALL_TAC]);;
 
 (* ------------------------------------------------------------------------- *)
 (* M[f] :=                                                                   *)
@@ -215,7 +216,7 @@ gg `REDU (App (App (App _S _I) _I)
               (App (App _S (App _K f)) (App (App _S _I) _I)))
          (App f (App (App (App _S _I) _I)
                      (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
-ee (REPEAT_SLV SUPERSTEP_SLV);;
+ee (COLIM_SLV SUPERSTEP_SLV);;
 top_thm1();;
 
 (* ------------------------------------------------------------------------- *)
@@ -239,5 +240,5 @@ gg `!f. REDU (App YCOMB f)
              (App f (App (App (App _S _I) _I)
                     (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
 ee (TACTIC_SLV (GEN_TAC THEN REWRITE_TAC[YCOMB]));;
-ee (REPEAT_SLV SUPERSTEP_SLV);;
+ee (COLIM_SLV SUPERSTEP_SLV);;
 top_thm1();;
