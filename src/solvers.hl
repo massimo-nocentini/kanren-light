@@ -157,16 +157,6 @@ let THM_TACTIC_SLV (ttac:thm_tactic) : thm_solver =
   fun th -> try let tac = ttac th in TACTIC_SLV tac
             with Failure _ -> NO_SLV;;
 
-(* let ALL_SLV = TACTIC_SLV ALL_TAC;; *)
-(* let CONJ_SLV = TACTIC_SLV CONJ_TAC;; *)
-(* let CONTR_SLV = THM_TACTIC_SLV CONTR_TAC;; *)
-(* let CONV_SLV conv = TACTIC_SLV (CONV_TAC conv);; *)
-(* let DISCH_SLV = TACTIC_SLV DISCH_TAC;; *)
-(* let DISJ1_SLV = TACTIC_SLV DISJ1_TAC;; *)
-(* let DISJ2_SLV = TACTIC_SLV DISJ2_TAC;; *)
-(* let EQ_SLV = TACTIC_SLV EQ_TAC;; *)
-(* let GEN_SLV = TACTIC_SLV GEN_TAC;; *)
-
 (* ------------------------------------------------------------------------- *)
 (* Further basic solvers.                                                    *)
 (* ------------------------------------------------------------------------- *)
@@ -358,20 +348,6 @@ let MAP_EVERY_SLV slvf lst =
   EVERY_SLV (map slvf lst);;
 
 (* ------------------------------------------------------------------------- *)
-(* Solvers to augment assumption list.                                       *)
-(* ------------------------------------------------------------------------- *)
-
-(*
-let (LABEL_SLV: string -> thm_solver) =
-  fun s th -> TACTIC_SLV (LABEL_TAC s th);;
-*)
-
-(*
-let ASSUME_SLV : thm_solver =
-  fun th -> TACTIC_SLV (ASSUME_TAC th);;
-*)
-
-(* ------------------------------------------------------------------------- *)
 (* Manipulation of assumption list.                                          *)
 (* ------------------------------------------------------------------------- *)
 
@@ -409,11 +385,6 @@ let RULE_ASSUM_SLV : (thm -> thm) -> solver =
 
 let CONCAT_SLV (slv1:solver) (slv2:solver) : solver =
   fun g -> concatf (slv1 g) (fun _ -> slv2 g);;
-
-(*
-let COLLECT_OLD_SLV (slvl:solver list) : solver =
-  if slvl = [] then NO_SLV else end_itlist CONCAT_SLV slvl;;
-*)
 
 let rec stream_of_list (l : 'a list) : 'a stream =
   match l with
@@ -516,13 +487,6 @@ parse_as_infix("IS",(10,"right"));;
 
 let IS_DEF = new_definition
   `(IS) = (=):A->A->bool`;;
-
-(*
-let IS_SLV : conv -> solver =
-  fun conv ->
-    let conv' = RAND_CONV conv THENC REWRITE_CONV[IS_DEF] in
-    THEN_SLV (TACTIC_SLV (CONV_TAC conv')) REFL_SLV;;
-*)
 
 let IS_SLV : conv -> solver =
   let IS_TAC : conv -> tactic =
