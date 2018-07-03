@@ -9,13 +9,6 @@
 (* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
-(* Versione alternativa di prova di COLIM_SLV.                              *)
-(* ------------------------------------------------------------------------- *)
-
-let rec REPEAT2_SLV (slv : solver) : solver =
-  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV slv (REPEAT2_SLV slv)) g ;;
-
-(* ------------------------------------------------------------------------- *)
 (* Definizione dei combinatori SKI e della riduzione.                        *)
 (* ------------------------------------------------------------------------- *)
 
@@ -177,10 +170,6 @@ let STEP_SLV : solver =
      RULE_SLV REDU_RATOR;
      RULE_SLV REDU_TRANS];;
 
-(* TODO: Meglio usare REPEAT_SLV ? *)
-let rec REDU_SLV : solver =
-  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV STEP_SLV REDU_SLV) g;;
-
 (* ------------------------------------------------------------------------- *)
 (* Nuova stragegia.  Fare prima I e K e sennò S (in profondità).             *)
 (* ------------------------------------------------------------------------- *)
@@ -216,7 +205,7 @@ gg `REDU (App (App (App _S _I) _I)
               (App (App _S (App _K f)) (App (App _S _I) _I)))
          (App f (App (App (App _S _I) _I)
                      (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
-ee (COLIM_SLV SUPERSTEP_SLV);;
+ee (REPEAT_SLV SUPERSTEP_SLV);;
 top_thm1();;
 
 (* ------------------------------------------------------------------------- *)
@@ -240,5 +229,5 @@ gg `!f. REDU (App YCOMB f)
              (App f (App (App (App _S _I) _I)
                     (App (App _S (App _K f)) (App (App _S _I) _I))))`;;
 ee (TACTIC_SLV (GEN_TAC THEN REWRITE_TAC[YCOMB]));;
-ee (COLIM_SLV SUPERSTEP_SLV);;
+ee (REPEAT_SLV SUPERSTEP_SLV);;
 top_thm1();;

@@ -67,19 +67,15 @@ print_endline "Fine test: prolog length";;
 
 print_endline "Inizio test: prolog append";;
 
-take 10 (solve
-  (THEN_SLV (ACCEPT_SLV APPEND_NIL) (COLIM_SLV (RULE_SLV APPEND_CONS)))
-  `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
 let APPEND_SLV : solver =
-  COLIM_SLV (CONCAT_SLV (ACCEPT_SLV APPEND_NIL)
-                         (RULE_SLV APPEND_CONS));;
+  REPEAT_SLV (CONCAT_SLV (ACCEPT_SLV APPEND_NIL) (RULE_SLV APPEND_CONS));;
+
+take 10 (solve APPEND_SLV
+               `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
 
 list_of_stream
   (solve APPEND_SLV
          `??x. APPEND [1;2] [3] = x`);;
-
-REWRITE_CONV [APPEND_NIL; APPEND_CONS] `APPEND [1;2] [3]`;;
 
 list_of_stream
   (solve APPEND_SLV
@@ -96,18 +92,6 @@ assert (instantiate i1 `xs:num list` = `[]:num list`);
 assert (instantiate i1 `ys:num list` = `[1; 2]`);
 assert (concl th2 = `APPEND [1] [2] = [1; 2]`);
 assert (concl th3 = `APPEND [1; 2] [] = [1; 2]`);;
-
-(* With type instantiation. *)
-
-take 10 (solve
-  (THEN_SLV (COLIM_SLV (RULE_SLV APPEND_CONS)) (ACCEPT_SLV APPEND_NIL))
-  `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [APPEND_HORN])
-               `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;
-
-take 10 (solve (PROLOG_SLV NO_CONV [APPEND_HORN])
-               `??xs ys. APPEND xs ys = [1;2;3]`);;
 
 print_endline "Fine test: prolog append";;
 

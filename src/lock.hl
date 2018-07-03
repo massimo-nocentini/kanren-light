@@ -62,18 +62,16 @@ let STEP_SLV : solver =
      ACCEPT_SLV REFL_APPEND_NIL;
      RULE_SLV CONS_EQ_APPEND];;
 
-(* TODO: Meglio usare REPEAT_SLV ? *)
 let rec SEARCH_SLV : solver =
   fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
                       (THEN_SLV STEP_SLV SEARCH_SLV) g;;
 
+let rec SEARCH_SLV : solver =
+  REPEAT_SLV STEP_SLV;;
+
 gg `??x. LOCK x x`;;
 ee SEARCH_SLV;;
 let sols = top_thms();;
-(* Diverge!
-;;
-let sols1 = next sols;;
-*)
 
 (* ------------------------------------------------------------------------- *)
 (* Second example.                                                           *)

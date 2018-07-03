@@ -53,14 +53,8 @@ let STEP_SLV : solver =
      ACCEPT_SLV ALL2_NIL;
      RULE_SLV ALL2_CONS];;
 
-(* TODO: Meglio usare REPEAT_SLV ? *)
 let rec EVAL_SLV : solver =
-  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV STEP_SLV EVAL_SLV) g;;
-
-(* Perche' questo non converge?!! *)
-(*
-let rec EVAL_SLV : solver = COLIM_SLV STEP_SLV;;
-*)
+  LAZY_REPEAT_SLV STEP_SLV;;
 
 take 1 (solve EVAL_SLV
   `??ret. EVAL ['(list y), "x"] '(list x) ret`);;
@@ -125,11 +119,6 @@ let EVAL_SLV : solver =
   fun mgoal ->
     let s = STEP_SLV mgoal in
     s ++ map EVAL_SLV s;;
-
-let EVAL_SLV : solver =
-  COLIM_SLV
-    STEP_SLV
-
 
 gg `??q. EVAL [] q q`;;
 ee EVAL_SLV;;

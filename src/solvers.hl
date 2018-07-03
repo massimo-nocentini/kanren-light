@@ -344,6 +344,12 @@ let (print_mgoalstack:mgoalstack->unit) =
 let EVERY_SLV slvl =
   itlist THEN_SLV slvl (TACTIC_SLV ALL_TAC);;
 
+(* TODO: Better version?
+let EVERY_SLV slvl =
+  if slvl = [] then TACTIC_SLV ALL_TAC else
+  end_itlist THEN_SLV slvl;;
+*)
+
 let MAP_EVERY_SLV slvf lst =
   EVERY_SLV (map slvf lst);;
 
@@ -351,7 +357,6 @@ let MAP_EVERY_SLV slvf lst =
 (* Manipulation of assumption list.                                          *)
 (* ------------------------------------------------------------------------- *)
 
-(* Tradisce lo spirito.  Rivedere. *)
 let FIND_ASSUM_SLV : thm_solver -> term -> solver =
   fun tslv t (_,(asl,_) as g) ->
     tslv(snd(find (fun (_,th) -> concl th = t) asl)) g;;
@@ -370,14 +375,6 @@ let POP_ASSUM_LIST_SLV : (thm list -> solver) -> solver =
 
 let EVERY_ASSUM_SLV : thm_solver -> solver =
   fun tslv -> ASSUM_LIST_SLV (MAP_EVERY_SLV tslv);;
-
-let RULE_ASSUM_SLV : (thm -> thm) -> solver =
-  fun rule (_,(asl,_) as g) ->
-    THEN_SLV (POP_ASSUM_LIST_SLV(K (TACTIC_SLV ALL_TAC)))
-             (MAP_EVERY_SLV
-                (fun (s,th) -> TACTIC_SLV (LABEL_TAC s (rule th)))
-                (rev asl))
-             g;;
 
 (* ------------------------------------------------------------------------- *)
 (* Concatenation of solvers.                                                 *)
@@ -437,6 +434,12 @@ let COLLECT_SLV (slvl:solver list) : solver =
   if slvl = [] then NO_SLV else
   multibind slvl [];;
 
+(* TODO: Is this better? *)
+(*
+let COLLECT_SLV (slvl:solver list) : solver =
+  itlist CONCAT_SLV slvl NO_SLV;;
+*)
+
 let MAP_COLLECT_SLV (slvf:'a->solver) (lst:'a list) : solver =
   COLLECT_SLV (map slvf lst);;
 
@@ -446,15 +449,17 @@ let COLLECT_ASSUM_SLV (tslv:thm_solver) : solver =
 let COLLECT_X_ASSUM_SLV (tslv:thm_solver) : solver =
   COLLECT_ASSUM_SLV (fun th -> UNDISCH_THEN_SLV (concl th) tslv);;
 
-(* Serve?  Serve la versione con mplusf? *)
-let MAYBE_SLV slv =
+let MAYBE_SLV (slv : solver) : solver =
   CONCAT_SLV slv (TACTIC_SLV ALL_TAC);;
 
-(* Serve?  Serve la versione con mplusf? *)
-let rec COLIM_SLV slv g =
-  (CONCAT_SLV (THEN_SLV slv (COLIM_SLV slv)) (TACTIC_SLV ALL_TAC)) g;;
+let rec REPEAT_SLV (slv : solver) : solver =
+  fun g ->
+    CONCAT_SLV (THEN_SLV slv (REPEAT_SLV slv)) (TACTIC_SLV ALL_TAC) g;;
 
-(* Serve?  Serve la versione con mplusf? *)
+let rec LAZY_REPEAT_SLV (slv : solver) : solver =
+  fun g ->
+    CONCAT_SLV (TACTIC_SLV ALL_TAC) (THEN_SLV slv (LAZY_REPEAT_SLV slv)) g ;;
+
 let APPLY_SLV : thm_solver =
   fun th -> try let rule = RULE_SLV th in
                 CONCAT_SLV (ACCEPT_SLV th) rule
