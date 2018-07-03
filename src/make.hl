@@ -8,8 +8,8 @@
 (* Load the core library.                                                    *)
 (* ------------------------------------------------------------------------- *)
 
-loadt "streams.hl";;                    (* Library for streams              *)
-loadt "misc.hl";;                       (* Miscellanea                      *)
-loadt "tunify.hl";;                     (* Unification helper functions     *)
-loadt "solvers.hl";;                    (* Basic solvers and HO solvers     *)
-loadt "list_solvers.hl";;               (* Solvers for lists                *)
+loadt "kanren-light/streams.hl";;       (* Library for streams              *)
+loadt "kanren-light/misc.hl";;          (* Miscellanea                      *)
+loadt "kanren-light/tunify.hl";;        (* Unification helper functions     *)
+loadt "kanren-light/solvers.hl";;       (* Basic solvers and HO solvers     *)
+loadt "kanren-light/list_solvers.hl";;  (* Solvers for lists                *)

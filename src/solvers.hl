@@ -472,6 +472,7 @@ let APPLY_SLV : thm_solver =
 let MPLUS_SLV (slv1:solver) (slv2:solver) : solver =
   fun g -> mplusf (slv1 g) (fun _ -> slv2 g);;
 
+(* TODO: è sbilanciato verso l'inizio della lista. *)
 let INTERLEAVE_SLV (slvl:solver list) : solver =
   if slvl = [] then NO_SLV else end_itlist MPLUS_SLV slvl;;
 
