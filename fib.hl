@@ -1,0 +1,154 @@
+(* ========================================================================= *)
+(* Fibonacci.                                                                *)
+(* ========================================================================= *)
+
+let FIB = define
+  `FIB 0 = 0 /\
+   FIB 1 = 1 /\
+   (!n. FIB (n+2) = FIB n + FIB (n+1))`;;
+
+let [FIB0;FIB1;FIBREC] = CONJUNCTS FIB;;
+
+g `FIB (n+3) = FIB n + 2 * FIB (n+1)`;;
+e (REWRITE_TAC[ARITH_RULE `n + 3 = (n + 1) + 2`]);;
+e (GEN_REWRITE_TAC LAND_CONV [FIB]);;
+e (REWRITE_TAC[ARITH_RULE `(n + 1) + 1 = n + 2`]);;
+e (GEN_REWRITE_TAC (LAND_CONV o RAND_CONV) [FIB]);;
+e ARITH_TAC;;
+top_thm();;
+
+g `!n. FIB (n+4) = FIB (n+2) + 2 * FIB (n+1) + FIB n`;;
+e GEN_TAC;;
+e (REPEAT (CHANGED_TAC
+     (REWRITE_TAC[ARITH_RULE `n + 4 = (n + 2) + 2 /\ n + 3 = (n + 1) + 2`] THEN
+      REWRITE_TAC[FIB; GSYM ADD_ASSOC;] THEN
+      NUM_REDUCE_TAC)));;
+e ARITH_TAC;;
+top_thm();;
+
+g `!n. FIB (n+6) = FIB (n+3) + 3 * FIB (n+2) + 3 * FIB (n+1) + FIB n`;;
+e GEN_TAC;;
+e (REPEAT (CHANGED_TAC
+     (REWRITE_TAC[ARITH_RULE
+        `n + 6 = (n + 4) + 2 /\ n + 5 = (n + 3) + 2 /\
+         n + 4 = (n + 2) + 2 /\ n + 3 = (n + 1) + 2`] THEN
+      REWRITE_TAC[FIB; GSYM ADD_ASSOC;] THEN
+      NUM_REDUCE_TAC)));;
+e ARITH_TAC;;
+top_thm();;
+
+g `!n. FIB (n+8) =
+       FIB (n+4) + 4 * FIB (n+3) + 6 * FIB (n+2) + 4 * FIB (n+1) + FIB n`;;
+e GEN_TAC;;
+e (REPEAT (CHANGED_TAC
+     (REWRITE_TAC[ARITH_RULE
+        `n + 8 = (n + 6) + 2 /\ n + 7 = (n + 5) + 2 /\
+         n + 6 = (n + 4) + 2 /\ n + 5 = (n + 3) + 2 /\
+         n + 4 = (n + 2) + 2 /\ n + 3 = (n + 1) + 2`] THEN
+      REWRITE_TAC[FIB; GSYM ADD_ASSOC;] THEN
+      NUM_REDUCE_TAC)));;
+e ARITH_TAC;;
+top_thm();;
+
+g `!n. FIB (n+10) =
+       FIB (n+5) + 5 * FIB (n+4) + 10 * FIB (n+3) + 
+       10 * FIB (n+2) + 5 * FIB (n+1) + FIB n`;;
+e GEN_TAC;;
+e (REPEAT (CHANGED_TAC
+     (REWRITE_TAC[ARITH_RULE
+        `n + 10 = (n + 8) + 2 /\ n + 9 = (n + 7) + 2 /\
+         n + 8 = (n + 6) + 2 /\ n + 7 = (n + 5) + 2 /\
+         n + 6 = (n + 4) + 2 /\ n + 5 = (n + 3) + 2 /\
+         n + 4 = (n + 2) + 2 /\ n + 3 = (n + 1) + 2`] THEN
+      REWRITE_TAC[FIB; GSYM ADD_ASSOC;] THEN
+      NUM_REDUCE_TAC)));;
+e (CONV_TAC (BINOP_CONV NUM_NORMALIZE_CONV));;
+e ARITH_TAC;;
+top_thm();;
+
+gg `??x. FIB (n + 2) = x`;;
+ee (ACCEPT_SLV FIBREC);;
+top_thm1();;
+
+let MINUSTWO_CONV : conv =
+  let pth = ARITH_RULE `j + 2 = k <=> n + k = (n + j) + 2` in
+  let jvar,kvar = `j:num`,`k:num` in
+  let plus_tm = `(+):num->num->num` in
+  let mk_plus2 tm = mk_binop plus_tm tm `2` in
+  let MK_PLUS2 tm = NUM_ADD_CONV (mk_plus2 tm) in
+  fun tm ->
+    let ktm = rand tm in
+    let k = dest_numeral ktm in
+    if k <=/ num_2 then failwith "MINUSTWO_CONV" else
+    let jtm = mk_numeral(k -/ num_2) in
+    EQ_MP (INST [ktm,kvar; jtm,jvar] pth) (MK_PLUS2 jtm);;
+
+MINUSTWO_CONV `n + 10`;;
+
+let FIBREC_CONV : conv =
+  GEN_REWRITE_CONV I [FIBREC] ORELSEC
+  (RAND_CONV MINUSTWO_CONV THENC GEN_REWRITE_CONV I [FIBREC] THENC
+   RAND_CONV (REWRITE_CONV [GSYM ADD_ASSOC] THENC NUM_REDUCE_CONV));;
+
+FIBREC_CONV `FIB (n + 1)`;;
+FIBREC_CONV `FIB (n + 2)`;;
+FIBREC_CONV `FIB (n + 5)`;;
+
+let rec DEPTH_FIBREC_CONV (n:int) : conv =
+  fun th ->
+    if n <= 0 then ALL_CONV th else
+    ((FIBREC_CONV THENC BINOP_CONV (DEPTH_FIBREC_CONV (n-1))) ORELSEC
+     ALL_CONV)
+    th;;
+
+(DEPTH_FIBREC_CONV 1 THENC NUM_NORMALIZE_CONV) `FIB (n + 2)`;;
+(DEPTH_FIBREC_CONV 2 THENC NUM_NORMALIZE_CONV) `FIB (n + 4)`;;
+(DEPTH_FIBREC_CONV 3 THENC NUM_NORMALIZE_CONV) `FIB (n + 6)`;;
+(DEPTH_FIBREC_CONV 4 THENC NUM_NORMALIZE_CONV) `FIB (n + 8)`;;
+
+(DEPTH_FIBREC_CONV 2 THENC NUM_NORMALIZE_CONV) `FIB (n + 3)`;;
+(DEPTH_FIBREC_CONV 2 THENC NUM_NORMALIZE_CONV) `FIB (n + 5)`;;
+(DEPTH_FIBREC_CONV 3 THENC NUM_NORMALIZE_CONV) `FIB (n + 5)`;;
+(DEPTH_FIBREC_CONV 3 THENC NUM_NORMALIZE_CONV) `FIB (n + 6)`;;
+
+gg `??k x. FIB (n + k) = x`;;
+ee (INST_SLV [`2`:`k:num`]);;
+
+
+gg `??x. FIB (n + 4) = x`;;
+tt (CONV_TAC (REDEPTH_CONV FIBREC_CONV));;
+
+tt (CONV_TAC (LAND_CONV NUM_NORMALIZE_CONV));;
+ee REFL_SLV;;
+top_thm();;
+
+
+
+tt (CONV_TAC (ONCE_DEPTH_CONV MINUSTWO_CONV));;
+ee (RULE_SLV EQ_TRANS);;
+tt CONJ_TAC;;
+ee (ACCEPT_SLV FIBREC);;
+tt (REWRITE_TAC[GSYM ADD_ASSOC] THEN NUM_REDUCE_TAC);;
+
+tt (CONV_TAC (ONCE_DEPTH_CONV MINUSTWO_CONV));;
+ee (RULE_SLV EQ_TRANS);;
+tt CONJ_TAC;;
+ee (ACCEPT_SLV FIBREC);;
+tt (REWRITE_TAC[GSYM ADD_ASSOC] THEN NUM_REDUCE_TAC);;
+
+
+
+
+ee (RULE_SLV (ARITH_RULE `!a b c. b = c ==> a + b = a + c`));;
+tt (REWRITE_TAC[ARITH_RULE `(n+2)+1 = (n + 1) + 2`]);;
+ee (RULE_SLV EQ_TRANS);;
+tt CONJ_TAC;;
+ee (ACCEPT_SLV FIBREC);;
+ee (RULE_SLV (ARITH_RULE `!a b c. b = c ==> a + b = a + c`));;
+tt (REWRITE_TAC[ARITH_RULE `(n+1)+1 = n + 2`]);;
+ee (ACCEPT_SLV FIBREC);;
+top_thm1();;
+
+(CONV_RULE (BINOP_CONV NUM_NORMALIZE_CONV)) (top_thm1());;
+
+

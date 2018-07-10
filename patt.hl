@@ -1,0 +1,118 @@
+(* ------------------------------------------------------------------------- *)
+(* Prefix of a list.                                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let PREFIX = new_definition
+  `!p q:A list. PREFIX p q <=> ?b. APPEND p b = q`;;
+
+let PREFIX_CLAUSES = prove
+ (`(!xs:A list. PREFIX xs [] <=> xs = []) /\
+   (!ys:A list. PREFIX [] ys) /\
+   (!x xs y ys:A list. PREFIX (CONS x xs) (CONS y ys) <=>
+                       x = y /\ PREFIX xs ys)`,
+  CONJ_TAC THENL
+  [REWRITE_TAC[PREFIX; APPEND_EQ_NIL] THEN MESON_TAC[]; ALL_TAC] THEN
+  CONJ_TAC THENL
+  [REWRITE_TAC[PREFIX; APPEND] THEN MESON_TAC[]; ALL_TAC] THEN
+  REPEAT GEN_TAC THEN GEN_REWRITE_TAC LAND_CONV [PREFIX] THEN
+  REWRITE_TAC[APPEND; CONS_11; PREFIX] THEN MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Sublist relation.                                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let SUBLIST = new_definition
+  `SUBLIST l m <=> ?a b:A list. APPEND a (APPEND l b) = m`;;
+
+let AVOID = new_definition
+  `!p q:A list. AVOID p q <=> ~(SUBLIST q p)`;;
+
+let SUBLIST_HEAD = prove
+ (`!xs ys:A list. PREFIX xs ys ==> SUBLIST xs ys`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[PREFIX; SUBLIST] THEN STRIP_TAC THEN
+  EXISTS_TAC `[]:A list` THEN REWRITE_TAC[APPEND] THEN ASM_MESON_TAC[]);;
+
+let SUBLIST_TAIL = prove
+ (`!xs y ys:A list. SUBLIST xs ys ==> SUBLIST xs (CONS y ys)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[SUBLIST] THEN STRIP_TAC THEN
+  EXISTS_TAC `CONS y a:A list` THEN REWRITE_TAC[APPEND] THEN ASM_MESON_TAC[]);;
+
+let SUBLIST_CLAUSES = prove
+ (`(!xs:A list. SUBLIST [] xs) /\
+   (!xs:A list. SUBLIST xs [] <=> xs = []) /\
+   (!x:A xs y ys. SUBLIST (CONS x xs) (CONS y ys) <=>
+                  x = y /\ PREFIX xs ys \/ SUBLIST (CONS x xs) ys)`,
+  CONJ_TAC THENL
+  [GEN_TAC THEN REWRITE_TAC[SUBLIST; APPEND] THEN
+   EXISTS_TAC `[]:A list` THEN REWRITE_TAC[APPEND] THEN MESON_TAC[];
+   ALL_TAC] THEN
+  CONJ_TAC THENL
+  [REWRITE_TAC[SUBLIST; APPEND_EQ_NIL] THEN MESON_TAC[]; ALL_TAC] THEN
+  REPEAT GEN_TAC THEN GEN_REWRITE_TAC LAND_CONV [SUBLIST] THEN EQ_TAC THENL
+  [REWRITE_TAC[LEFT_IMP_EXISTS_THM] THEN LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[APPEND; CONS_11] THEN REPEAT STRIP_TAC THEN
+    ASM_REWRITE_TAC[] THEN DISJ1_TAC THEN REWRITE_TAC[PREFIX] THEN
+    ASM_MESON_TAC[];
+    ALL_TAC] THEN
+   GEN_TAC THEN REWRITE_TAC[APPEND; CONS_11] THEN
+   ASM_CASES_TAC `h:A = y` THENL
+   [POP_ASSUM SUBST_VAR_TAC THEN REWRITE_TAC[] THEN
+    DISCH_TAC THEN DISJ2_TAC THEN REWRITE_TAC[SUBLIST] THEN
+    MAP_EVERY EXISTS_TAC [`t:A list`; `b:A list`] THEN
+    ASM_REWRITE_TAC[APPEND];
+    ALL_TAC] THEN
+   ASM_REWRITE_TAC[];
+   ALL_TAC] THEN
+  STRIP_TAC THENL
+  [FIRST_X_ASSUM (SUBST_VAR_TAC o GSYM) THEN EXISTS_TAC `[]:A list` THEN
+   POP_ASSUM (STRIP_ASSUME_TAC o REWRITE_RULE[PREFIX]) THEN
+   REWRITE_TAC[APPEND; CONS_11] THEN ASM_MESON_TAC[];
+   ALL_TAC] THEN
+  POP_ASSUM (STRIP_ASSUME_TAC o REWRITE_RULE[SUBLIST; APPEND]) THEN
+  EXISTS_TAC `CONS y a:A list` THEN REWRITE_TAC[APPEND; CONS_11] THEN
+  ASM_MESON_TAC[]);;
+
+let AVOID_CLAUSES = prove
+ (`(!q:A list. ~(q = []) ==> AVOID [] q) /\
+   (!a:A p q. ~PREFIX q (CONS a p) /\ AVOID p q ==> AVOID (CONS a p) q)`,
+  CONJ_TAC THENL
+  [GEN_TAC THEN REWRITE_TAC[AVOID] THEN
+   REWRITE_TAC[SUBLIST; APPEND_EQ_NIL] THEN MESON_TAC[];
+   ALL_TAC] THEN
+  REPEAT GEN_TAC THEN INTRO_TAC "npre +" THEN
+  REWRITE_TAC[AVOID; MESON[] `(~q ==> ~p) <=> (p ==> q)`] THEN
+  POP_ASSUM MP_TAC THEN
+  STRUCT_CASES_TAC (ISPEC `q:A list` (cases "list")) THEN
+  REWRITE_TAC[SUBLIST_CLAUSES; PREFIX_CLAUSES] THEN MESON_TAC[]);;
+
+let NOTPREFIX_CLAUSES = prove
+ (`(!x:A xs. ~PREFIX (CONS x xs) []) /\
+   (!x:A xs y ys. ~(x = y) ==> ~PREFIX (CONS x xs) (CONS y ys)) /\
+   (!x:A xs ys. ~PREFIX xs ys ==> ~PREFIX (CONS x xs) (CONS x ys))`,
+  REWRITE_TAC[PREFIX_CLAUSES; NOT_CONS_NIL] THEN MESON_TAC[]);;
+
+let [NOTPREFIX_NIL;NOTPREFIX_HEAD;NOTPREFIX_TAIL] =
+  CONJUNCTS NOTPREFIX_CLAUSES;;
+
+let slv1 = ACCEPT_SLV NOTPREFIX_NIL;;
+let slv2 = THEN_SLV (RULE_SLV NOTPREFIX_HEAD) (TACTIC_SLV (REWRITE_TAC[]));;
+
+
+let rec NOTPREFIX_SLV : solver =
+  fun g ->
+    let slv3 = THEN_SLV (RULE_SLV NOTPREFIX_TAIL) NOTPREFIX_SLV in
+    CONCAT_SLV slv1 (CONCAT_SLV slv2 slv3) g;;
+
+let AVOID_NIL,AVOID_CONS = CONJ_PAIR AVOID_CLAUSES;;
+
+let rec AVOID_SLV : solver =
+  let slv1 = THEN_SLV (RULE_SLV AVOID_NIL) (ACCEPT_SLV NOT_CONS_NIL) in
+  fun g -> 
+    let slv2 = THEN_SLV (RULE_SLV AVOID_CONS)
+               (THENL_SLV (TACTIC_SLV CONJ_TAC)
+                          [NOTPREFIX_SLV; AVOID_SLV]) in
+    CONCAT_SLV slv1 slv2 g;;
+
+gg `??p. AVOID p [T;F]`;;
+ee (AVOID_SLV);;
+take 3 (top_thms());;
