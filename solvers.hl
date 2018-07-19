@@ -116,7 +116,8 @@ let ACCEPT_SLV : thm_solver =
     let insts = term_ty_unify (union avs mvs) (concl th') w in
     let sth = INSTANTIATE_ALL insts th' in
     let just i _ = INSTANTIATE_ALL i sth in
-    (avs,insts),[],just);;
+    let meta = mapfilter (check is_var o instantiate insts) avs,insts in
+    meta,[],just);;
 
 let RULE_SLV : thm_solver = fun th ->
  if not(is_imp(snd(strip_forall(concl th)))) then
@@ -125,8 +126,8 @@ let RULE_SLV : thm_solver = fun th ->
    SOLVER (fun mvs (asl,w) ->
      let avs,th = SPEC_FRESH_ALL th in
      let ant,con = dest_imp(concl th) in
-     let inst = term_ty_unify (union avs mvs) con w in
-     let sth = INSTANTIATE_ALL inst th in
+     let insts = term_ty_unify (union avs mvs) con w in
+     let sth = INSTANTIATE_ALL insts th in
      let lant = fst(dest_imp(concl sth)) in
      let just i (th :: _) =
        try MP (INSTANTIATE_ALL i sth) th
@@ -134,7 +135,8 @@ let RULE_SLV : thm_solver = fun th ->
          (report(string_of_thm (CONJ (INSTANTIATE_ALL i sth) th));
           fail())
        in
-     (avs,inst),[asl,lant],just);;
+     let meta = mapfilter (check is_var o instantiate insts) avs,insts in
+     meta,[asl,lant],just);;
 
 let SAFE_RULE_SLV : thm_solver =
   fun th -> try RULE_SLV th with Failure _ -> NO_SLV;;
