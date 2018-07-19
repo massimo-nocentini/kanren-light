@@ -89,6 +89,10 @@ let AVOID_CLAUSES = prove
   STRUCT_CASES_TAC (ISPEC `q:A list` (cases "list")) THEN
   REWRITE_TAC[SUBLIST_CLAUSES; PREFIX_CLAUSES] THEN MESON_TAC[]);;
 
+(* ------------------------------------------------------------------------- *)
+(* Helper theorems for computing AVOID.                                      *)
+(* ------------------------------------------------------------------------- *)
+
 let NOTPREFIX_CLAUSES = prove
  (`(!x:A xs. ~PREFIX (CONS x xs) []) /\
    (!x:A xs y ys. ~(x = y) ==> ~PREFIX (CONS x xs) (CONS y ys)) /\
@@ -99,26 +103,61 @@ let NOTPREFIX_CLAUSES = prove
 (* Basic taut solver.                                                        *)
 (* ------------------------------------------------------------------------- *)
 
+let UNIFY_TY_ACCEPT_TAC (mvs : term list) : thm_tactic =
+  fun th (asl,w) ->
+    let avs,th' = SPEC_FRESH_ALL th in
+    let insts = term_ty_unify (union avs mvs) (concl th') w in
+    let sth = INSTANTIATE_ALL insts th' in
+    let just i _ = INSTANTIATE_ALL i sth in
+    (avs,insts),[],just;;
+
+(*
+let UNIFY_ACCEPT_TAC mvs th (asl,w) =
+  let insts = term_unify mvs (concl th) w in
+  ([],insts),[],
+  let th' = INSTANTIATE insts th in
+  fun i [] -> INSTANTIATE i th';;
+*)
+
+
 let TAUT_SLV : solver =
+  let nn_th = MESON[] `p ==> ~ ~p`
+  and imp_th = MESON[] `~p \/ q ==> (p ==> q)`
+  and nimp_th = MESON[] `p /\ ~q ==> ~(p ==> q)`
+  and nend_th = MESON[] `~p \/ ~q ==> ~(p /\ q)`
+  and nor_th = MESON[] `~p /\ ~q ==> ~(p \/ q)`
+  and iff_th = MESON[] `(p ==> q) /\ (q ==> p) ==> (p <=> q)`
+  and niff_th = MESON[] `p /\ ~q \/ ~p /\ q ==> ~(p <=> q)`
+  and nf_th = MESON[] `~F` in
   REPEAT_SLV
     (COLLECT_SLV
        [SOLVER (fun mvs ->
-          FIRST [UNIFY_ACCEPT_TAC mvs TRUTH;
-                 UNIFY_ACCEPT_TAC mvs (MESON [] `~F`);
-                 MATCH_MP_TAC (MESON[] `p ==> ~ ~p`);
-                 MATCH_MP_TAC (MESON[] `~p \/ q ==> (p ==> q)`);
-                 MATCH_MP_TAC (MESON[] `p /\ ~q ==> ~(p ==> q)`) THEN CONJ_TAC;
-                 MATCH_MP_TAC (MESON[] `~p \/ ~q ==> ~(p /\ q)`);
-                 MATCH_MP_TAC (MESON[] `~p /\ ~q ==> ~(p \/ q)`) THEN CONJ_TAC;
-                 MATCH_MP_TAC
-                   (MESON[] `(p ==> q) /\ (q ==> p) ==> (p <=> q)`) THEN
-                   CONJ_TAC;
-                 MATCH_MP_TAC
-                   (MESON[] `p /\ ~q \/ ~p /\ q ==> ~(p <=> q)`);
-                                  CONJ_TAC]);
-        ACCEPT_SLV (MESON [] `~F`);
+          FIRST [CONJ_TAC;
+                 UNIFY_ACCEPT_TAC mvs TRUTH;
+                 UNIFY_ACCEPT_TAC mvs nf_th;
+                 MATCH_MP_TAC nn_th;
+                 MATCH_MP_TAC imp_th;
+                 MATCH_MP_TAC nimp_th;
+                 MATCH_MP_TAC nend_th;
+                 MATCH_MP_TAC nor_th;
+                 MATCH_MP_TAC iff_th;
+                 MATCH_MP_TAC niff_th]);
         TACTIC_SLV DISJ1_TAC;
         TACTIC_SLV DISJ2_TAC]);;
+
+gg `??a. ~(T <=> a)`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+gg `??p. ~p ==> p`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+(*
+gg `~p ==> p`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+*)
 
 gg `??p q. p ==> ~q`;;
 ee TAUT_SLV;;
@@ -147,13 +186,11 @@ list_of_stream (top_thms());;
 let [NOTPREFIX_NIL; NOTPREFIX_HEAD; NOTPREFIX_TAIL] =
   CONJUNCTS NOTPREFIX_CLAUSES;;
 
-let slv1 = ACCEPT_SLV NOTPREFIX_NIL;;
-let slv2 = THEN_SLV (RULE_SLV NOTPREFIX_HEAD) TAUT_SLV;;
-
 let rec NOTPREFIX_SLV : solver =
-  fun g ->
-    let slv3 = THEN_SLV (RULE_SLV NOTPREFIX_TAIL) NOTPREFIX_SLV in
-    MPLUS_SLV slv1 (CONCAT_SLV slv2 slv3) g;;
+  let slv1 = ACCEPT_SLV NOTPREFIX_NIL
+  and slv2 = THEN_SLV (RULE_SLV NOTPREFIX_HEAD) TAUT_SLV
+  and slv3 = RULE_SLV NOTPREFIX_TAIL in
+  fun g -> INTERLEAVE_SLV [slv1; slv2; THEN_SLV slv3 NOTPREFIX_SLV] g;;
 
 gg `~PREFIX [T;T] [T;F;T]`;;
 ee NOTPREFIX_SLV;;
@@ -163,10 +200,18 @@ gg `??x. ~PREFIX [T;T] x`;;
 ee NOTPREFIX_SLV;;
 list_of_stream (top_thms());;
 
+gg `??x. ~PREFIX x [T;F]`;;
+ee NOTPREFIX_SLV;;
+list_of_stream (top_thms());;
+
 let AVOID_NIL,AVOID_CONS = CONJ_PAIR AVOID_CLAUSES;;
 
+let AVOID_NIL_ALT = prove
+ (`!x:A xs. AVOID [] (CONS x xs)`,
+  REPEAT GEN_TAC THEN MATCH_MP_TAC AVOID_NIL THEN REWRITE_TAC[NOT_CONS_NIL]);;
+
 let rec AVOID_SLV : solver =
-  let slv1 = THEN_SLV (RULE_SLV AVOID_NIL) (ACCEPT_SLV NOT_CONS_NIL) in
+  let slv1 = ACCEPT_SLV AVOID_NIL_ALT in
   fun g -> 
     let slv2 = THEN_SLV (RULE_SLV AVOID_CONS)
                (THENL_SLV (TACTIC_SLV CONJ_TAC)
@@ -175,4 +220,4 @@ let rec AVOID_SLV : solver =
 
 gg `??p. AVOID p [T;F]`;;
 ee (AVOID_SLV);;
-take 7 (top_thms());;
+take 30 (top_thms());;
