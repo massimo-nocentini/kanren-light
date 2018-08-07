@@ -1,4 +1,86 @@
 (* ------------------------------------------------------------------------- *)
+(* UNIFY_TY_ACCEPT_TAC is similar to UNIFY_ACCEPT_TAC used in ITAUT.         *)
+(* However:                                                                  *)
+(*   1. unify types (uses term_ty_unify)                                     *)
+(*   2. refresh universal variables in the theorem                           *)
+(* ------------------------------------------------------------------------- *)
+
+let UNIFY_TY_ACCEPT_TAC (mvs : term list) : thm_tactic =
+  fun th (asl,w) ->
+    let avs,th' = SPEC_FRESH_ALL th in
+    let insts = term_ty_unify (union avs mvs) (concl th') w in
+    let sth = INSTANTIATE_ALL insts th' in
+    let just i _ = INSTANTIATE_ALL i sth in
+    (avs,insts),[],just;;
+
+(* ------------------------------------------------------------------------- *)
+(* Basic taut solver.                                                        *)
+(* ------------------------------------------------------------------------- *)
+
+let TAUT_SLV : solver =
+  let nn_th = MESON[] `p ==> ~ ~p`
+  and imp_th = MESON[] `~p \/ q ==> (p ==> q)`
+  and nimp_th = MESON[] `p /\ ~q ==> ~(p ==> q)`
+  and nand_th = MESON[] `~p \/ ~q ==> ~(p /\ q)`
+  and nor_th = MESON[] `~p /\ ~q ==> ~(p \/ q)`
+  and iff_th = MESON[] `(p ==> q) /\ (q ==> p) ==> (p <=> q)`
+  and niff_th = MESON[] `p /\ ~q \/ ~p /\ q ==> ~(p <=> q)`
+  and nf_th = MESON[] `~F` in
+  REPEAT_SLV
+    (COLLECT_SLV
+       [SOLVER (fun mvs ->
+          FIRST [CONJ_TAC;
+                 UNIFY_ACCEPT_TAC mvs TRUTH;
+                 UNIFY_ACCEPT_TAC mvs nf_th;
+                 MATCH_MP_TAC nn_th;
+                 MATCH_MP_TAC imp_th;
+                 MATCH_MP_TAC nimp_th;
+                 MATCH_MP_TAC nand_th;
+                 MATCH_MP_TAC nor_th;
+                 MATCH_MP_TAC iff_th;
+                 MATCH_MP_TAC niff_th]);
+        TACTIC_SLV DISJ1_TAC;
+        TACTIC_SLV DISJ2_TAC]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Tests and examples for TAUT_SLV.                                          *)
+(* ------------------------------------------------------------------------- *)
+
+gg `??a. ~(T <=> a)`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+gg `??p. ~p ==> p`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+(*;;
+gg `~p ==> p`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+*)
+
+gg `??p q. p ==> ~q`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+gg `??p q r. p \/ ~q /\ (T \/ r)`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+gg `??x y. x <=> ~y`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+gg `??x y. ~(x <=> ~y)`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+gg `??x. ~x`;;
+ee TAUT_SLV;;
+list_of_stream (top_thms());;
+
+(* ------------------------------------------------------------------------- *)
 (* Prefix of a list.                                                         *)
 (* ------------------------------------------------------------------------- *)
 
@@ -99,92 +181,12 @@ let NOTPREFIX_CLAUSES = prove
    (!x:A xs ys. ~PREFIX xs ys ==> ~PREFIX (CONS x xs) (CONS x ys))`,
   REWRITE_TAC[PREFIX_CLAUSES; NOT_CONS_NIL] THEN MESON_TAC[]);;
 
-(* ------------------------------------------------------------------------- *)
-(* Basic taut solver.                                                        *)
-(* ------------------------------------------------------------------------- *)
-
-let UNIFY_TY_ACCEPT_TAC (mvs : term list) : thm_tactic =
-  fun th (asl,w) ->
-    let avs,th' = SPEC_FRESH_ALL th in
-    let insts = term_ty_unify (union avs mvs) (concl th') w in
-    let sth = INSTANTIATE_ALL insts th' in
-    let just i _ = INSTANTIATE_ALL i sth in
-    (avs,insts),[],just;;
-
-(*
-let UNIFY_ACCEPT_TAC mvs th (asl,w) =
-  let insts = term_unify mvs (concl th) w in
-  ([],insts),[],
-  let th' = INSTANTIATE insts th in
-  fun i [] -> INSTANTIATE i th';;
-*)
-
-
-let TAUT_SLV : solver =
-  let nn_th = MESON[] `p ==> ~ ~p`
-  and imp_th = MESON[] `~p \/ q ==> (p ==> q)`
-  and nimp_th = MESON[] `p /\ ~q ==> ~(p ==> q)`
-  and nend_th = MESON[] `~p \/ ~q ==> ~(p /\ q)`
-  and nor_th = MESON[] `~p /\ ~q ==> ~(p \/ q)`
-  and iff_th = MESON[] `(p ==> q) /\ (q ==> p) ==> (p <=> q)`
-  and niff_th = MESON[] `p /\ ~q \/ ~p /\ q ==> ~(p <=> q)`
-  and nf_th = MESON[] `~F` in
-  REPEAT_SLV
-    (COLLECT_SLV
-       [SOLVER (fun mvs ->
-          FIRST [CONJ_TAC;
-                 UNIFY_ACCEPT_TAC mvs TRUTH;
-                 UNIFY_ACCEPT_TAC mvs nf_th;
-                 MATCH_MP_TAC nn_th;
-                 MATCH_MP_TAC imp_th;
-                 MATCH_MP_TAC nimp_th;
-                 MATCH_MP_TAC nend_th;
-                 MATCH_MP_TAC nor_th;
-                 MATCH_MP_TAC iff_th;
-                 MATCH_MP_TAC niff_th]);
-        TACTIC_SLV DISJ1_TAC;
-        TACTIC_SLV DISJ2_TAC]);;
-
-gg `??a. ~(T <=> a)`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-
-gg `??p. ~p ==> p`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-
-(*
-gg `~p ==> p`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-*)
-
-gg `??p q. p ==> ~q`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-
-gg `??p q r. p \/ ~q /\ (T \/ r)`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-
-gg `??x y. x <=> ~y`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-
-gg `??x y. ~(x <=> ~y)`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
-
-gg `??x. ~x`;;
-ee TAUT_SLV;;
-list_of_stream (top_thms());;
+let [NOTPREFIX_NIL; NOTPREFIX_HEAD; NOTPREFIX_TAIL] =
+  CONJUNCTS NOTPREFIX_CLAUSES;;
 
 (* ------------------------------------------------------------------------- *)
 (* Solvers.                                                                  *)
 (* ------------------------------------------------------------------------- *)
-
-let [NOTPREFIX_NIL; NOTPREFIX_HEAD; NOTPREFIX_TAIL] =
-  CONJUNCTS NOTPREFIX_CLAUSES;;
 
 let rec NOTPREFIX_SLV : solver =
   let slv1 = ACCEPT_SLV NOTPREFIX_NIL
