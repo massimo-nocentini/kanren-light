@@ -4,7 +4,7 @@
 (* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
 
-needs "streams.hl";;
+needs "kanren-light/streams.hl";;
 
 type mgoal = term list * goal;;
 

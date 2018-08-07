@@ -2,7 +2,7 @@
 (* Examples with list of numbers.                                            *)
 (* ========================================================================= *)
 
-needs "solvers.hl";;
+needs "kanren-light/solvers.hl";;
 
 type_invention_warning := false;;
 needs "Permutation/make.ml";;
