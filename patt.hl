@@ -17,6 +17,10 @@ let UNIFY_TY_ACCEPT_TAC (mvs : term list) : thm_tactic =
 (* Basic taut solver.                                                        *)
 (* ------------------------------------------------------------------------- *)
 
+let PRINT_SLV (s:string) : solver =
+  report ("PRINT_SLV: "^s);
+  TACTIC_SLV ALL_TAC;;
+
 let TAUT_SLV : solver =
   let nn_th = MESON[] `p ==> ~ ~p`
   and imp_th = MESON[] `~p \/ q ==> (p ==> q)`
@@ -27,7 +31,7 @@ let TAUT_SLV : solver =
   and niff_th = MESON[] `p /\ ~q \/ ~p /\ q ==> ~(p <=> q)`
   and nf_th = MESON[] `~F` in
   REPEAT_SLV
-    (COLLECT_SLV
+    (INTERLEAVE_SLV
        [SOLVER (fun mvs ->
           FIRST [CONJ_TAC;
                  UNIFY_ACCEPT_TAC mvs TRUTH;
@@ -45,6 +49,18 @@ let TAUT_SLV : solver =
 (* ------------------------------------------------------------------------- *)
 (* Tests and examples for TAUT_SLV.                                          *)
 (* ------------------------------------------------------------------------- *)
+
+gg `F`;;
+ee (THEN_SLV TAUT_SLV NO_SLV);;
+list_of_stream(top_thms());;
+
+gg `p:bool`;;
+ee (THEN_SLV TAUT_SLV NO_SLV);;
+list_of_stream(top_thms());;
+
+gg `??p. p`;;
+ee (THEN_SLV TAUT_SLV NO_SLV);;
+list_of_stream(top_thms());;
 
 gg `??a. ~(T <=> a)`;;
 ee TAUT_SLV;;
@@ -190,7 +206,7 @@ let [NOTPREFIX_NIL; NOTPREFIX_HEAD; NOTPREFIX_TAIL] =
 
 let rec NOTPREFIX_SLV : solver =
   let slv1 = ACCEPT_SLV NOTPREFIX_NIL
-  and slv2 = THEN_SLV (RULE_SLV NOTPREFIX_HEAD) TAUT_SLV
+  and slv2 = THEN_SLV (RULE_SLV NOTPREFIX_HEAD) (THEN_SLV TAUT_SLV NO_SLV)
   and slv3 = RULE_SLV NOTPREFIX_TAIL in
   fun g -> INTERLEAVE_SLV [slv1; slv2; THEN_SLV slv3 NOTPREFIX_SLV] g;;
 
@@ -199,6 +215,20 @@ ee NOTPREFIX_SLV;;
 top_thm1();;
 
 gg `??x. ~PREFIX [T;T] x`;;
+ee NOTPREFIX_SLV;;
+list_of_stream (top_thms());;
+
+gg `??x. ~PREFIX x [T]`;;
+ee (RULE_SLV NOTPREFIX_HEAD);;
+ee TAUT_SLV;;
+ss ();;
+top_thm1();;
+
+gg `??x. ~PREFIX x [T]`;;
+ee NOTPREFIX_SLV;;
+list_of_stream (top_thms());;
+
+gg `??x. ~PREFIX x [F]`;;
 ee NOTPREFIX_SLV;;
 list_of_stream (top_thms());;
 
@@ -221,5 +251,6 @@ let rec AVOID_SLV : solver =
     MPLUS_SLV slv1 slv2 g;;
 
 gg `??p. AVOID p [T;F]`;;
-ee (AVOID_SLV);;
+ee AVOID_SLV;;
+top_thm1();;
 take 30 (top_thms());;

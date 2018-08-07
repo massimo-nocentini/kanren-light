@@ -60,6 +60,11 @@ let rec stream_mapfilter (f : 'a -> 'b) (s : 'a stream) : 'b stream =
 
 let singleton (x : 'a) : 'a stream = Cons(x, fun _ -> Empty);;
 
+let rec stream_of_list (l : 'a list) : 'a stream =
+  match l with
+    [] -> Empty
+  | h :: t -> Cons(h,fun () -> stream_of_list t);;
+
 (* ------------------------------------------------------------------------- *)
 (* Merge a list of (suspended) streams.                                      *)
 (* ------------------------------------------------------------------------- *)

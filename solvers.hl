@@ -385,20 +385,8 @@ let EVERY_ASSUM_SLV : thm_solver -> solver =
 let CONCAT_SLV (slv1:solver) (slv2:solver) : solver =
   fun g -> concatf (slv1 g) (fun _ -> slv2 g);;
 
-let rec stream_of_list (l : 'a list) : 'a stream =
-  match l with
-    [] -> Empty
-  | h :: t -> Cons(h,fun () -> stream_of_list t);;
-
-let COLLECT_SLV (slvl:solver list) : solver =
-  if slvl = [] then NO_SLV else
-  mergef_stream slvl [];;
-
-(* TODO: Is this better? *)
-(*
 let COLLECT_SLV (slvl:solver list) : solver =
   itlist CONCAT_SLV slvl NO_SLV;;
-*)
 
 let MAP_COLLECT_SLV (slvf:'a->solver) (lst:'a list) : solver =
   COLLECT_SLV (map slvf lst);;
@@ -432,9 +420,15 @@ let APPLY_SLV : thm_solver =
 let MPLUS_SLV (slv1:solver) (slv2:solver) : solver =
   fun g -> mplusf (slv1 g) (fun _ -> slv2 g);;
 
-(* TODO: è sbilanciato verso l'inizio della lista. *)
+(* OLD VERSION: è sbilanciato verso l'inizio della lista. *)
+(*
 let INTERLEAVE_SLV (slvl:solver list) : solver =
   if slvl = [] then NO_SLV else end_itlist MPLUS_SLV slvl;;
+*)
+
+let INTERLEAVE_SLV (slvl:solver list) : solver =
+  if slvl = [] then NO_SLV else
+  mergef_stream slvl [];;
 
 let MAP_INTERLEAVE_SLV (slvf:'a->solver) (lst:'a list) : solver =
   INTERLEAVE_SLV (map slvf lst);;
