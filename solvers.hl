@@ -390,51 +390,9 @@ let rec stream_of_list (l : 'a list) : 'a stream =
     [] -> Empty
   | h :: t -> Cons(h,fun () -> stream_of_list t);;
 
-(* ------------------------------------------------------------------------- *)
-(* Merge a list of (suspended) streams.                                      *)
-(* ------------------------------------------------------------------------- *)
-
-let rec mergef_stream
-      (l : (unit -> 'a stream) list)
-      (r : (unit -> 'a stream) list) : 'a stream =
-  match l with
-    [] -> if r = [] then Empty else mergef_stream (rev r) []
-  | f::fs ->
-      match f() with
-        Empty -> mergef_stream fs r
-      | Cons (x,f') -> Cons (x, fun () -> mergef_stream fs (f' :: r));;
-
-let merge_stream (l : 'a stream list) : 'a stream =
-  let hs,ts =
-    itlist (fun x (hs,ts) ->
-              match x with
-                Empty -> (hs,ts)
-              | Cons(x,f) -> (x::hs), (f::ts))
-           l
-           ([],[]) in
-  concatf (stream_of_list hs) (fun _ -> mergef_stream ts []);;
-
-(*;;
-take 9 (
-merge_stream
-  [stream_of_list [1;2;3;4];
-   stream_of_list [-1;-2;-3;-4]]);;
-*)
-
-let rec multibind
-      (l : ('b -> 'a stream) list)
-      (r : (unit -> 'a stream) list) : 'b -> 'a stream =
-  fun b ->
-    match l with
-      [] -> if r = [] then Empty else mergef_stream (rev r) []
-    | f::fs ->
-        match f b with
-          Empty -> multibind fs r b
-        | Cons (x,f') -> Cons (x, fun () -> multibind fs (f' :: r) b);;
-
 let COLLECT_SLV (slvl:solver list) : solver =
   if slvl = [] then NO_SLV else
-  multibind slvl [];;
+  mergef_stream slvl [];;
 
 (* TODO: Is this better? *)
 (*

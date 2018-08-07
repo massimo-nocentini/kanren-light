@@ -61,6 +61,48 @@ let rec stream_mapfilter (f : 'a -> 'b) (s : 'a stream) : 'b stream =
 let singleton (x : 'a) : 'a stream = Cons(x, fun _ -> Empty);;
 
 (* ------------------------------------------------------------------------- *)
+(* Merge a list of (suspended) streams.                                      *)
+(* ------------------------------------------------------------------------- *)
+
+let mergef_stream :
+  ('b -> 'a stream) list -> (unit -> 'a stream) list -> 'b -> 'a stream =
+
+  (* ---------------------------------------------------------------------- *)
+  (* Questa definizione generalizza il tipo di mergef_stream perché in ML   *)
+  (* nel corpo della definizione di una funzione ricorsiva le variabili     *)
+  (* di tipo non si possono istanziare.                                     *)
+  (* ---------------------------------------------------------------------- *)
+
+  let rec mergef
+        (l : (unit -> 'a stream) list)
+        (r : (unit -> 'a stream) list) : 'a stream =
+    match l with
+      [] -> if r = [] then Empty else mergef (rev r) []
+    | f::fs ->
+        match f() with
+          Empty -> mergef fs r
+        | Cons (x,f') -> Cons (x, fun () -> mergef fs (f' :: r)) in
+
+  let rec mergef_stream l r b =
+    match l with
+      [] -> if r = [] then Empty else mergef (rev r) []
+    | f::fs ->
+        match f b with
+          Empty -> mergef_stream fs r b
+        | Cons (x,f') -> Cons (x, fun () -> mergef_stream fs (f' :: r) b) in
+  mergef_stream;;
+
+let merge_stream : 'a stream list -> 'a stream =
+  let rec unzip (l : 'a stream list) (hs,ts) : 'a list * (unit->'a stream) list =
+    match l with
+      [] -> (hs,ts)
+    | Empty :: l' -> unzip l' (hs,ts)
+    | Cons(x,f)::l' -> unzip l' (x::hs,f::ts) in
+  fun l ->
+    let hs,ts = unzip l ([],[]) in
+    concatf (stream_of_list (rev hs)) (mergef_stream (rev ts) []);;
+
+(* ------------------------------------------------------------------------- *)
 (* Further helping functions.                                                *)
 (* ------------------------------------------------------------------------- *)
 
@@ -104,4 +146,29 @@ let bind_test =
     8₇ 8₂₃
     10₁₅
     where subscripts denotes positions in the list of items they are attached to.
+*)
+
+(* -------------------------------------------------------------------------- *)
+(* Tests and examples for mergef_stream.                                      *)
+(* -------------------------------------------------------------------------- *)
+
+(*;;
+take 9 (
+merge_stream
+  [stream_of_list [1;2;3;4];
+   stream_of_list [-1;-2;-3;-4]]);;
+take 15 (
+merge_stream
+  [stream_of_list [1;2;3;4];
+   stream_of_list [-1;-2;-3;-4];
+   stream_of_list [51;52;53;54]]);;
+take 15 (
+merge_stream
+  [stream_of_list [1;2;3;4];
+   stream_of_list [-1;-2];
+   stream_of_list [51;52;53;54]]);;
+
+take 20 (mplusf (stream_of_list [1;2;3;4;5]) (fun () -> stream_of_list [10;11;12]));;
+take 20 (mplusf (stream_of_list [1;2;3]) (fun () -> stream_of_list [10;11;12;13]));;
+take 20 (merge_stream [stream_of_list [1;2;3;4;5]; stream_of_list [10;11;12]]);;
 *)
