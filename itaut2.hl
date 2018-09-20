@@ -56,35 +56,44 @@
                            ITAUT_TAC mvs (n - 1) THEN NO_TAC))) gl;;
 *)
 
+let META_SPEC_SLV : thm_solver =
+  fun th ->
+    try let gv = genvar(type_of(fst(dest_forall(concl th)))) in
+        TACTIC_SLV (META_SPEC_TAC gv th)
+    with Failure _ -> NO_SLV;;
+
+let ANTS_SLV : thm_solver =
+  fun th ->
+    SOLVER (fun _ ->
+      SUBGOAL_THEN (fst(dest_imp(concl th)))
+                   (fun ath -> ASSUME_TAC (MP th ath)));;
+
+let META_EXISTS_SLV : solver =
+  SOLVER (fun _ gl ->
+    let gv = genvar(type_of(fst(dest_exists(snd gl)))) in
+    X_META_EXISTS_TAC gv gl);;
+
+let PHASE1_SLV : solver =
+  SOLVER (fun mvs gl ->
+    REPEAT (FIRST [FIRST_ASSUM (UNIFY_ACCEPT_TAC mvs);
+                   ACCEPT_TAC TRUTH;
+                   FIRST_ASSUM CONTR_TAC;
+                   RIGHT_REVERSIBLE_TAC;
+                   FIRST_X_ASSUM LEFT_REVERSIBLE_TAC])
+           gl);;
+
+let PHASE2_SLV : solver =
+  INTERLEAVE_SLV
+    [TACTIC_SLV DISJ1_TAC;
+     TACTIC_SLV DISJ2_TAC;
+     COLLECT_ASSUM_SLV ANTS_SLV;
+     COLLECT_ASSUM_SLV META_SPEC_SLV;
+     META_EXISTS_SLV];;
+
 let ITAUT_STEP_SLV : solver =
-  THEN_SLV
-    (SOLVER (fun mvs gl ->
-       REPEAT (FIRST [FIRST_ASSUM (UNIFY_ACCEPT_TAC mvs);
-                      ACCEPT_TAC TRUTH;
-                      FIRST_ASSUM CONTR_TAC;
-                      RIGHT_REVERSIBLE_TAC;
-                      FIRST_X_ASSUM LEFT_REVERSIBLE_TAC])
-              gl))
-    (INTERLEAVE_SLV
-       [COLLECT_ASSUM_SLV
-         (fun th ->
-            try let gv = genvar(type_of(fst(dest_forall(concl th)))) in
-               TACTIC_SLV (META_SPEC_TAC gv th)
-            with Failure _ -> NO_SLV);
-        TACTIC_SLV DISJ1_TAC;
-        TACTIC_SLV DISJ2_TAC;
-        COLLECT_ASSUM_SLV
-          (fun th ->
-             SOLVER (fun _ gl ->
-               SUBGOAL_THEN (fst(dest_imp(concl th)))
-                 (fun ath -> ASSUME_TAC (MP th ath))
-                 gl));
-        SOLVER (fun _ gl ->
-          let gv = genvar(type_of(fst(dest_exists(snd gl)))) in
-          X_META_EXISTS_TAC gv gl)]);;
+  THEN_SLV PHASE1_SLV PHASE2_SLV;;
 
 let ITAUT_SLV : solver = REPEAT_SLV ITAUT_STEP_SLV;;
-
 
 (*
 let ITAUT_TAC =
@@ -98,41 +107,64 @@ let ITAUT_TAC =
 (* Alternative interface.                                                    *)
 (* ------------------------------------------------------------------------- *)
 
-(*
-let ITAUT tm = prove(tm,ITAUT_TAC);;
-*)
-
 let ITAUT2 tm = get(solve ITAUT_SLV tm);;
 
+(* ------------------------------------------------------------------------- *)
+(* ITAUT from the HOL Library.  Fails on this example.                       *)
+(* ------------------------------------------------------------------------- *)
 
+ITAUT
+  `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
+   padre c d /\
+   padre a c /\
+   padre a b
+   ==> ?x:A. nonno a x`;;
 
+(* ------------------------------------------------------------------------- *)
+(* Testing our own version.                                                  *)
+(* ------------------------------------------------------------------------- *)
 
+ITAUT2
+  `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
+   padre c d /\
+   padre a c /\
+   padre a b
+   ==> ?x:A. nonno a x`;;
 
-ITAUT `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
-       padre c d /\
-       padre a c /\
-       padre a b
-       ==> ?x:A. nonno a x`;;
+(* ------------------------------------------------------------------------- *)
+(* Step-by-step.                                                             *)
+(* ------------------------------------------------------------------------- *)
 
-gg `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
-           padre c d &&
-           padre a c &&
-           padre a b
-           ?- nonno a x`;;
-ee ITAUT_SLV;;
-top_thm1();;
+gg `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
+    padre c d /\
+    padre a c /\
+    padre a b
+    ==> ?x:A. nonno a x`;;
+ee PHASE1_SLV;;
+ee PHASE2_SLV;;
+ee PHASE2_SLV;;
+ee PHASE2_SLV;;
+ee PHASE2_SLV;;
+ee PHASE1_SLV;;
+ee PHASE2_SLV;;
 
-ee (RULE_SLV (ASSUME `!x y z. padre x y /\ padre y z ==> nonno x z`));;
-tt CONJ_TAC;;
-ee (ACCEPT_SLV (ASSUME `padre (a:A) (c:A) : bool`));;
-ee (ACCEPT_SLV (ASSUME `padre (c:A) (d:A) : bool`));;
-top_thm1();;
+let  STEP_SLV : solver = THEN_SLV PHASE1_SLV PHASE2_SLV;;
+let STEP2_SLV : solver = THEN_SLV STEP_SLV STEP_SLV;;
+let STEP3_SLV : solver = THEN_SLV STEP_SLV STEP2_SLV;;
+let STEP4_SLV : solver = THEN_SLV STEP_SLV STEP3_SLV;;
 
-gg `??x:A. (!x y z. padre x y /\ padre y z ==> nonno x z) &&
-           padre c d &&
-           padre a c &&
-           padre a b
-           ?- nonno a x`;;
-ee (POP_ASSUM_LIST_SLV (PROLOG_SLV NO_CONV));;
-top_thm1();;
-*)
+let SOLVED_SLV : solver -> solver =
+  fun slv g ->
+    let gstates = slv g in
+    bind gstates
+         (function _,[],_ as gstate -> Cons (gstate,fun () -> Empty)
+                 | _ -> Empty);;
+
+ee (COLLECT_SLV
+  [SOLVED_SLV STEP_SLV;
+   SOLVED_SLV STEP2_SLV;
+   SOLVED_SLV STEP3_SLV;
+   STEP4_SLV]);;
+ss ();;
+
+let DEEPENING_SLV n : solver
