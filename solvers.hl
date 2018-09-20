@@ -301,17 +301,15 @@ let ss () =
 let tt : tactic -> mgoalstack =
   fun tac -> ee (TACTIC_SLV tac);;
 
-let top_thms : unit -> thm stream =
-  (*
+let top_thms : unit -> (term list * thm) stream =
   let mk_eq i v = mk_eq(v,instantiate i v) in
   let p ((mvs,inst),th) = map (mk_eq inst) mvs,th in
-  *)
   fun () ->
     match !current_mgoalstack with
       [] -> failwith "top_thms: Goalstack empty"
-    | s :: _ -> stream_mapfilter (snd o wrapup) s;;
+    | s :: _ -> stream_mapfilter (p o wrapup) s;;
 
-let top_thm1() : thm =
+let top_thm1() : term list * thm =
   get (top_thms());;
 
 (*
@@ -325,12 +323,21 @@ top_thm1();;
 (* Printer for mgoalstacs.                                                   *)
 (* ------------------------------------------------------------------------- *)
 
-let print_goalstate (gs:goalstate) =
-  let (_,gl,_) = gs in
-  if gl = [] then () else
-  do_list print_goal (rev gl);;
+let print_goalstate : goalstate -> unit =
+  let print_var v = print_qterm v; Format.print_string ", " in
+  let print_metavars mvl =
+    Format.print_string "Metavariables: "; 
+    do_list print_var mvl;
+    Format.print_newline() in
+  fun gs ->
+    let ((mvl,_),gl,_) = gs in
+    if gl = [] then
+      (Format.print_string "No sub(m)goals"; Format.print_newline())
+    else
+      (do_list print_goal (rev gl);
+       print_metavars mvl);;
 
-let (print_mgoalstack:mgoalstack->unit) =
+let print_mgoalstack:mgoalstack->unit =
   fun mgls ->
     if mgls = [] then Format.print_string "Empty mgoalstack" else
     let mgl = hd mgls in
