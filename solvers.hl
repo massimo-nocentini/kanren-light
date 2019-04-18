@@ -202,7 +202,7 @@ let THEN_SLV,THENL_SLV =
          let goals' = map (inst_goal insts1) goals in
          stream_map
            (fun (mvs2,insts2),gls2,just2 ->
-             let just1' i = just1 (compose_insts i insts2) in
+             let just1' i = just1 (compose_insts insts2 i) in
              ((union mvs1 mvs2,compose_insts insts1 insts2),
               gls1@gls2,compose_justs (length gls1) just1' just2))
            (seqapply (union mvs1 mvs) slvs goals'))
