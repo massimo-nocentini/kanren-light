@@ -203,8 +203,8 @@ let THEN_SLV,THENL_SLV =
          stream_map
            (fun (mvs2,insts2),gls2,just2 ->
               let gls1' = map (inst_goal insts2) gls1
-              and metas = union mvs1 mvs2,compose_insts insts1 insts2 in
-              and just = compose_justs (length gls1) just1 just2 inst2 in
+              and metas = union mvs1 mvs2,compose_insts insts1 insts2
+              and just = compose_justs (length gls1) just1 just2 insts2 in
               metas,gls1'@gls2,just)
            (seqapply (union mvs1 mvs) slvs goals'))
    | _,_ -> failwith "seqapply: Length mismatch" in
