@@ -192,9 +192,9 @@ let META_EXISTS_SLV : term -> term list -> term -> solver =
 let THEN_SLV,THENL_SLV =
   let propagate_empty i [] = []
   and propagate_thm th i [] = INSTANTIATE_ALL i th in
-  let compose_justs n just1 just2 i ths =
+  let compose_justs n just1 just2 inst2 i ths =
     let ths1,ths2 = chop_list n ths in
-    (just1 i ths1)::(just2 i ths2) in
+    (just1 (compose_insts inst2 i) ths1)::(just2 i ths2) in
   let rec seqapply mvs l1 l2 = match (l1,l2) with
      ([],[]) -> singleton(null_meta,[],propagate_empty)
    | ((slv:solver)::slvs),((goal:goal)::goals) ->
@@ -202,9 +202,10 @@ let THEN_SLV,THENL_SLV =
          let goals' = map (inst_goal insts1) goals in
          stream_map
            (fun (mvs2,insts2),gls2,just2 ->
-             let just1' i = just1 (compose_insts insts2 i) in
-             ((union mvs1 mvs2,compose_insts insts1 insts2),
-              gls1@gls2,compose_justs (length gls1) just1' just2))
+              let gls1' = map (inst_goal insts2) gls1
+              and metas = union mvs1 mvs2,compose_insts insts1 insts2 in
+              and just = compose_justs (length gls1) just1 just2 inst2 in
+              metas,gls1'@gls2,just)
            (seqapply (union mvs1 mvs) slvs goals'))
    | _,_ -> failwith "seqapply: Length mismatch" in
   let justsequence just1 just2 insts2 i ths =
