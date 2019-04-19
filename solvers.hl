@@ -116,7 +116,7 @@ let ACCEPT_SLV : thm_solver =
     let insts = term_ty_unify (union avs mvs) (concl th') w in
     let sth = INSTANTIATE_ALL insts th' in
     let just i _ = INSTANTIATE_ALL i sth in
-    let meta = mapfilter (check is_var o instantiate insts) avs,insts in
+    let meta = avs,insts in
     meta,[],just);;
 
 let RULE_SLV : thm_solver = fun th ->
