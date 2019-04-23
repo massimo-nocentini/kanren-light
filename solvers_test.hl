@@ -19,7 +19,7 @@ take 10 (solve REFL_SLV `??m n. m + n = a + b`);;
 take 10 (solve REFL_SLV `??m n. FST (1,(m:A)) = FST (1,(n:B))`);;
 
 let [i,th] = take 3 (solve REFL_SLV `??m n. m + n = 1 + 2`) in
-assert (i = ([], [(`1`, `m:num`); (`2`, `n:num`)], []));
+assert (i = [(`1`, `m:num`); (`2`, `n:num`)]);
 assert (concl th = `1 + 2 = 1 + 2`);;
 
 print_endline "Fine test: REFL_SLV";;
@@ -32,7 +32,7 @@ print_endline "Inizio test: THEN_SLV";;
 
 let [i,th] = take 10 (solve (THEN_SLV (TACTIC_SLV CONJ_TAC) REFL_SLV)
                          `??m n. m + n = n + m /\ n + n = n + 1`) in
-assert (i = ([], [(`1`, `n:num`); (`1`, `m:num`)], []));
+assert (i = [(`1`, `m:num`); (`1`, `n:num`)]);
 assert (concl th = `1 + 1 = 1 + 1 /\ 1 + 1 = 1 + 1`);;
 
 take 10 (solve (THENL_SLV (TACTIC_SLV CONJ_TAC) [ACCEPT_SLV ADD_SYM; REFL_SLV])
@@ -41,8 +41,8 @@ take 10 (solve (THENL_SLV (TACTIC_SLV CONJ_TAC) [ACCEPT_SLV ADD_SYM; REFL_SLV])
 take 10 (solve (THENL_SLV (TACTIC_SLV CONJ_TAC) [REFL_SLV; ACCEPT_SLV ADD_SYM])
   `??m n. m + n = n + m /\ n + n = n + 1`);;
 
-let [i,th] =
-  take 10 (solve (THEN_SLV (RULE_SLV MOD_0) (ACCEPT_SLV (ASSUME `~(b = 0)`)))
+let [Some((_,i),th)] =
+  take 10 (raw_solve (THEN_SLV (ACCEPT_SLV MOD_0) (ACCEPT_SLV (ASSUME `~(b = 0)`)))
                  `??a b c. ~(b = 0) ?- a MOD b = c`) in
   assert (instantiate i `a:num` = `0`);
   assert (instantiate i `c:num` = `0`);
@@ -59,4 +59,10 @@ tt CONJ_TAC;;
 ee (META_EXISTS_SLV `x:num` [] `1`);;
 ee (TACTIC_SLV ARITH_TAC);;
 ee REFL_SLV;;
-assert (concl(top_thm1()) = `1 + 1 = 2 /\ 1 = 1`);;
+assert (concl(snd(top_thm1())) = `1 + 1 = 2 /\ 1 = 1`);;
+
+gg `??x. x + 1 = 2 /\ x = 1`;;
+ee (THENL_SLV (TACTIC_SLV CONJ_TAC)
+              [TACTIC_SLV ALL_TAC; REFL_SLV]);;
+tt ARITH_TAC;;
+take 10 (top_thms());;
