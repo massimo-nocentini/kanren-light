@@ -74,7 +74,7 @@ let solve : solver -> term -> ((term*term) list * thm) stream =
 (* Common pattern for building "singleton" solvers.                          *)
 (* ------------------------------------------------------------------------- *)
 
-let SOLVER (f:term list -> goal -> goalstate) : solver =
+let SOLVER (f:term list -> tactic) : solver =
   fun mvs,gl -> try singleton (f mvs gl) with Failure _ -> Empty;;
 
 (* ------------------------------------------------------------------------- *)
