@@ -1,0 +1,102 @@
+(* ========================================================================= *)
+(* Intuitionistic theorem prover (complete for propositional fragment).      *)
+(*                                                                           *)
+(*       John Harrison, University of Cambridge Computer Laboratory          *)
+(*                                                                           *)
+(*            (c) Copyright, University of Cambridge 1998                    *)
+(*              (c) Copyright, John Harrison 1998-2007                       *)
+(* ========================================================================= *)
+
+(* ------------------------------------------------------------------------- *)
+(* Accept a theorem modulo unification.                                      *)
+(* ------------------------------------------------------------------------- *)
+
+let UNIFY_ACCEPT_TAC mvs th (asl,w) =
+  let insts = term_unify mvs (concl th) w in
+  ([],insts),[],
+  let th' = INSTANTIATE insts th in
+  fun i [] -> INSTANTIATE i th';;
+
+let SOLVER_TAC : solver -> term list -> tactic =
+  fun slv mvs gl -> get(slv (mvs,gl));;
+
+(* ------------------------------------------------------------------------- *)
+(* The actual prover, as a tactic.                                           *)
+(* ------------------------------------------------------------------------- *)
+
+  let CONJUNCTS_THEN' ttac cth =
+    ttac(CONJUNCT1 cth) THEN ttac(CONJUNCT2 cth);;
+  let IMPLICATE t =
+    let th1 = AP_THM NOT_DEF (dest_neg t) in
+    CONV_RULE (RAND_CONV BETA_CONV) th1;;
+  let RIGHT_REVERSIBLE_TAC = FIRST
+   [CONJ_TAC;                                                     (* and     *)
+    GEN_TAC;                                                      (* forall  *)
+    DISCH_TAC;                                                    (* implies *)
+    (fun gl -> CONV_TAC(K(IMPLICATE(snd gl))) gl);                (* not     *)
+    EQ_TAC]                                                       (* iff     *)
+  and LEFT_REVERSIBLE_TAC th gl = tryfind (fun ttac -> ttac th gl)
+   [CONJUNCTS_THEN' ASSUME_TAC;                                   (* and    *)
+    DISJ_CASES_TAC;                                               (* or     *)
+    CHOOSE_TAC;                                                   (* exists *)
+    (fun th -> ASSUME_TAC (EQ_MP (IMPLICATE (concl th)) th));     (* not    *)
+    (CONJUNCTS_THEN' MP_TAC o uncurry CONJ  o EQ_IMP_RULE)];;     (* iff    *)
+
+  let rec TAUTO_SLV : int -> solver =
+    fun n (mvs,gl) as mgoal ->
+      if n <= 0 then Empty else
+      COLLECT_SLV
+        (map TACTIC_SLV
+          [FIRST_ASSUM (UNIFY_ACCEPT_TAC mvs);
+           ACCEPT_TAC TRUTH;
+           FIRST_ASSUM CONTR_TAC;
+           RIGHT_REVERSIBLE_TAC THEN TRY (SOLVER_TAC (TAUTO_SLV n) mvs);
+           FIRST_X_ASSUM LEFT_REVERSIBLE_TAC THEN TRY(SOLVER_TAC (TAUTO_SLV n) mvs);
+           FIRST_X_ASSUM(fun th -> ASSUME_TAC th THEN
+            (let gv = genvar(type_of(fst(dest_forall(concl th)))) in
+             META_SPEC_TAC gv th THEN
+             SOLVER_TAC (TAUTO_SLV (n - 2)) (gv::mvs) THEN NO_TAC));
+           DISJ1_TAC THEN SOLVER_TAC (TAUTO_SLV n) mvs THEN NO_TAC;
+           DISJ2_TAC THEN SOLVER_TAC (TAUTO_SLV n) mvs THEN NO_TAC;
+           (fun gl -> let gv = genvar(type_of(fst(dest_exists(snd gl)))) in
+                      (X_META_EXISTS_TAC gv THEN
+                       SOLVER_TAC (TAUTO_SLV (n - 2)) (gv::mvs) THEN NO_TAC) gl);
+           FIRST_ASSUM(fun th ->
+             SUBGOAL_THEN (fst(dest_imp(concl th)))
+                          (fun ath ->
+                             ASSUME_TAC (MP th ath)) THEN
+                             SOLVER_TAC (TAUTO_SLV (n - 1)) mvs THEN NO_TAC)])
+        mgoal;;
+
+  let rec TAUTO_ITERDEEP_SLV n mgoal =
+    remark ("Searching with limit "^(string_of_int n));
+    (CONCAT_SLV (THEN_SLV (TAUTO_SLV n) NO_SLV)
+                (TAUTO_ITERDEEP_SLV (n + 1))) mgoal;;
+
+let TAUTO_SLV : solver = TAUTO_ITERDEEP_SLV 0;;
+
+(* ------------------------------------------------------------------------- *)
+(* Alternative interface.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let TAUTO tm = snd(get(solve TAUTO_SLV tm));;
+
+TAUTO `p ==> p`;;
+TAUTO `p /\ q ==> p`;;
+TAUTO `p /\ q ==> p \/ p`;;
+
+
+(* Fallisce. *)
+TAUTO
+  `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
+   padre c d /\
+   padre a c /\
+   padre a b
+   ==> ?x:A. nonno a x`;;
+
+time TAUTO
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F))
+  ==> (output <=> ~(input_a \/ input_b))`;;
