@@ -127,33 +127,36 @@ let rec ITAUT_ITER_SLV n : solver =
 let ITAUT_SLV : solver = fun g -> ITAUT_ITER_SLV 0 g;;
 
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`F ==> a`)));;
+wrapup gstate;;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([`a:bool`],([],`a:bool`)));;
-(* Diverge.
-let [] = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
-*)
-take 100 (ITAUT_SLV ([`a:bool`],([],`~ ~a ==> a`)));;
-(* Perche' da' come unica suluzione a = T *)
 
-(* Errore.
+(* Non dimostrabile intuizionisticamente: diverge. *)
+(*
+let gstate::_ = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
+*)
+
 map wrapup (take 20 (ITAUT_SLV ([`a:bool`],([],`a /\ b ==> b /\ a`))));;
-*)
-
 take 10 (stream_map wrapup (ITAUT_SLV ([`a:bool`],(["",ASSUME `F`],`a:bool`))));;
 
-
-gg `??a b. a ==> b`;;
-ee ITAUT_SLV;;
-take 100 (top_thms());;
-
-
-time ITAUT_TAC ([],
+time (ITAUT_TAC [] 5) ([],
  `(~input_a ==> (internal <=> T)) /\
   (~input_b ==> (output <=> internal)) /\
   (input_a ==> (output <=> F)) /\
   (input_b ==> (output <=> F))
   ==> (output <=> ~(input_a \/ input_b))`);;
+wrapup it;;
+
+let gstate = time (get o DEPTH_ITAUT_SLV 5)
+([],([],
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F))
+  ==> (output <=> ~(input_a \/ input_b))`));;
+wrapup gstate;;
+"AAAAAAAAAAAAAAAAAAAAA";;
 
 let gstate :: _ = time (take 1 o ITAUT_SLV)
 ([],([],
@@ -165,7 +168,6 @@ let gstate :: _ = time (take 1 o ITAUT_SLV)
   ==> ~(input_a \/ input_b)`));;
 wrapup gstate;;
 
-(*
 let gstate :: _ = time (take 1 o THEN_SLV (TACTIC_SLV(PURE_REWRITE_TAC[MESON[] `~p <=> (p  ==> F)`])) (fun g -> ITAUT_SLV g))
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
@@ -175,7 +177,6 @@ let gstate :: _ = time (take 1 o THEN_SLV (TACTIC_SLV(PURE_REWRITE_TAC[MESON[] `
   ~input_a /\ ~input_b
   ==> output`));;
 wrapup gstate;;
-*)
 
 time (take 1 o ITAUT_SLV)
 ([],([],
