@@ -140,6 +140,45 @@ let gstate::_ = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
 map wrapup (take 20 (ITAUT_SLV ([`a:bool`],([],`a /\ b ==> b /\ a`))));;
 take 10 (stream_map wrapup (ITAUT_SLV ([`a:bool`],(["",ASSUME `F`],`a:bool`))));;
 
+time (ITAUT_TAC [] 2) ([],
+ `(~input_a ==> internal) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F)) /\
+  output
+  ==> ~(input_a \/ input_b)`);;
+wrapup it;;
+
+let gstate = time (get o DEPTH_ITAUT_SLV 3)
+([],([],
+ `(~input_a ==> internal) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F)) /\
+  output
+  ==> ~(input_a \/ input_b)`));;
+wrapup gstate;;
+
+
+time (ITAUT_TAC [] 4) ([],
+ `(~input_a ==> internal) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F))
+  ==> (output <=> ~(input_a \/ input_b))`);;
+wrapup it;;
+
+report "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";;
+
+let gstate = time (get o DEPTH_ITAUT_SLV 4)
+([],([],
+ `(~input_a ==> internal) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F))
+  ==> (output <=> ~(input_a \/ input_b))`));;
+wrapup gstate;;
+
+
+
 time (ITAUT_TAC [] 5) ([],
  `(~input_a ==> (internal <=> T)) /\
   (~input_b ==> (output <=> internal)) /\
