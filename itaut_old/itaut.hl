@@ -130,7 +130,9 @@ let gstate::_ = take 1 (ITAUT_SLV ([],([],`F ==> a`)));;
 wrapup gstate;;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a /\ b ==> b /\ a`)));;
 let gstate::_ = take 1 (ITAUT_SLV ([],([],`a ==> ~ ~ a`)));;
+(*
 let gstate::_ = take 1 (ITAUT_SLV ([`a:bool`],([],`a:bool`)));;
+*)
 
 (* Non dimostrabile intuizionisticamente: diverge. *)
 (*
@@ -140,7 +142,7 @@ let gstate::_ = take 10 (ITAUT_SLV ([],([],`~ ~a ==> a`)));;
 map wrapup (take 20 (ITAUT_SLV ([`a:bool`],([],`a /\ b ==> b /\ a`))));;
 take 10 (stream_map wrapup (ITAUT_SLV ([`a:bool`],(["",ASSUME `F`],`a:bool`))));;
 
-time (ITAUT_TAC [] 2) ([],
+time (ITAUT_TAC) ([],
  `(~input_a ==> internal) /\
   (input_a ==> (output <=> F)) /\
   (input_b ==> (output <=> F)) /\
@@ -158,7 +160,7 @@ let gstate = time (get o DEPTH_ITAUT_SLV 3)
 wrapup gstate;;
 
 
-time (ITAUT_TAC [] 4) ([],
+time (ITAUT_TAC) ([],
  `(~input_a ==> internal) /\
   (~input_b ==> (output <=> internal)) /\
   (input_a ==> (output <=> F)) /\
@@ -177,9 +179,7 @@ let gstate = time (get o DEPTH_ITAUT_SLV 4)
   ==> (output <=> ~(input_a \/ input_b))`));;
 wrapup gstate;;
 
-
-
-time (ITAUT_TAC [] 5) ([],
+time (ITAUT_TAC) ([],
  `(~input_a ==> (internal <=> T)) /\
   (~input_b ==> (output <=> internal)) /\
   (input_a ==> (output <=> F)) /\
@@ -223,6 +223,7 @@ time (take 1 o ITAUT_SLV)
   (~input_b ==> (output <=> internal)) /\
   ~input_a /\ ~input_b
   ==> output`));;
+wrapup (hd it);;
 
 time (take 1 o ITAUT_SLV)
 ([],([],
@@ -230,6 +231,7 @@ time (take 1 o ITAUT_SLV)
   (~input_b ==> (output <=> internal)) /\
   ~input_a /\ ~input_b
   ==> output`));;
+wrapup (hd it);;
 
 time (take 1 o ITAUT_SLV)
 ([],([],
@@ -237,13 +239,29 @@ time (take 1 o ITAUT_SLV)
   (internal <=> T) /\
   ~input_a /\ ~input_b
   ==> output`));;
+wrapup (hd it);;
 
-(* Diverge:
+(* Diverge *)
+(*
+ITAUT
+`(~input_a ==> (internal <=> T)) /\
+  ~input_a
+  ==> output`;;
+
 time (take 1 o ITAUT_SLV)
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
   ~input_a
   ==> output`));;
+wrapup (hd it);;
+*)
+
+;;
+ITAUT
+`(~input_a ==> (internal <=> T)) /\
+  (output <=> internal) /\
+  ~input_a /\ ~input_b
+  ==> output`;;
 
 time (take 1 o ITAUT_SLV)
 ([],([],
@@ -251,7 +269,12 @@ time (take 1 o ITAUT_SLV)
   (output <=> internal) /\
   ~input_a /\ ~input_b
   ==> output`));;
-*)
+
+ITAUT
+`(internal <=> T) /\
+  (output <=> internal) /\
+  ~input_a /\ ~input_b
+  ==> output`;;
 
 time (take 1 o ITAUT_SLV)
 ([],([],
@@ -259,16 +282,23 @@ time (take 1 o ITAUT_SLV)
   (output <=> internal) /\
   ~input_a /\ ~input_b
   ==> output`));;
+wrapup (hd it);;
 
-(*
-time (take 1 o ITAUT_SLV)
+ITAUT
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F))
+  ==> (output <=> ~(input_a \/ input_b))`;;
+
+time (take 1 o DEPTH_ITAUT_SLV 6)
 ([],([],
  `(~input_a ==> (internal <=> T)) /\
   (~input_b ==> (output <=> internal)) /\
   (input_a ==> (output <=> F)) /\
   (input_b ==> (output <=> F))
   ==> (output <=> ~(input_a \/ input_b))`));;
-*)
+wrapup (hd it);;
 
 (*
 time TAUT
