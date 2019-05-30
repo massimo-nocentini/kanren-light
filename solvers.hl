@@ -180,16 +180,23 @@ let UNDISCH_THEN_SLV : term -> thm_solver -> solver =
 
 (* ------------------------------------------------------------------------- *)
 (* Metas.                                                                    *)
+(* Caveat! Not related to (X_)META_EXISTS_TAC or EXISTS_TAC.                 *)
+(*                                                                           *)
+(* cvs local constants                                                       *)
+(* instantiate the meta variable v with term t                               *)
 (* ------------------------------------------------------------------------- *)
 
 let META_EXISTS_SLV : term -> term list -> term -> solver =
   fun v cvs t ->
     SOLVER (fun mvs (asl,w) ->
-      if not (mem v mvs) then fail() else
-      let mvs' = subtract (frees t) cvs in
+      if not (mem v mvs) then failwith "META_EXISTS_SLV: not a metavariable"
+      else
+      let fvs = frees t in
+      if mem v fvs then failwith "META_EXISTS_SLV: occur check" else
+      let mvs' = subtract fvs cvs in
       let vsubs = [t,v] in
       let vinst = [],vsubs,[] in
-      let just i [th] = INSTANTIATE_ALL (compose_insts i vinst) th in
+      let just i [th] = th in
       (mvs',vinst),[asl,vsubst vsubs w],just);;
 
 (* ------------------------------------------------------------------------- *)
