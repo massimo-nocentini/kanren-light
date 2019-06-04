@@ -203,7 +203,7 @@ let META_EXISTS_SLV : term -> term list -> term -> solver =
 (* Solver combinators.                                                       *)
 (* ------------------------------------------------------------------------- *)
 
-let THEN_SLV,THENL_SLV =
+let THEN_SLV,IF_SLV,THENL_SLV =
   let propagate_empty i [] = []
   and propagate_thm th i [] = INSTANTIATE_ALL i th in
   let compose_justs n just1 just2 inst2 i ths =
@@ -235,12 +235,19 @@ let THEN_SLV,THENL_SLV =
     fun slv1 slv2 (mvs,_ as g) ->
       bind (slv1 g) (fun _,gls,_ as gstate ->
         slvsequence mvs gstate (replicate slv2 (length gls)))
+  and (IF_SLV: solver -> solver -> solver -> solver) =
+    fun slv1 slv2 slv3 (mvs,_ as g) ->
+      match slv1 g with
+        Empty -> slv3 g
+      | _ as s ->
+        bind s (fun _,gls,_ as gstate ->
+          slvsequence mvs gstate (replicate slv2 (length gls)))
   and (THENL_SLV: solver -> solver list -> solver) =
     fun slv1 slv2l (mvs,_ as g) ->
       bind (slv1 g) (fun _,gls,_ as gstate ->
         if gls = [] then slvsequence mvs gstate []
         else slvsequence mvs gstate slv2l) in
-  THEN_SLV,THENL_SLV;;
+  THEN_SLV,IF_SLV,THENL_SLV;;
 
 (* ------------------------------------------------------------------------- *)
 (* Interactive usage of solvers.                                             *)
