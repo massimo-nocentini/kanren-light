@@ -1,0 +1,261 @@
+let tm =  `~(p /\ ~p)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `~(T <=> F)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `p \/ T <=> T`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!p. p ==> p`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(a ==> a /\ b) <=> (a ==> b)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(~a /\ b) /\ (~c /\ d) ==> ~(c \/ ~b) /\ ~(a \/ ~d)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(a \/ b) /\ ~(c /\ b) ==> c ==> a`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `p ==> q ==> r <=> p /\ q ==> r`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(!x. P x ==> Q) <=> (?x. P x) ==> Q`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(a <=> b) ==> a ==> b`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(p <=> p') ==> (p' ==> (q <=> q')) ==> (p ==> q <=> p' ==> q')`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(A ==> B) /\ (C ==> D) ==> (A /\ C ==> B /\ D)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(A ==> B) /\ (C ==> D) ==> (A \/ C ==> B \/ D)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(B ==> A) /\ (C ==> D) ==> ((A ==> C) ==> (B ==> D))`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(B ==> A) ==> (~A ==> ~B)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(a <=> b) <=> (a ==> b) /\ (b ==> a)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t1 t2 t3. t1 /\ t2 /\ t3 <=> (t1 /\ t2) /\ t3`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t1 t2. t1 /\ t2 <=> t2 /\ t1`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t1 t2 t3. t1 \/ t2 \/ t3 <=> (t1 \/ t2) \/ t3`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t1 t2. t1 \/ t2 <=> t2 \/ t1`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm =
+  `(p \/ q <=> q \/ p) /\
+   ((p \/ q) \/ r <=> p \/ (q \/ r)) /\
+   (p \/ (q \/ r) <=> q \/ (p \/ r)) /\
+   (p \/ p <=> p) /\
+   (p \/ (p \/ q) <=> p \/ q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `p /\ q ==> r <=> p ==> q ==> r`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `p /\ q ==> r <=> q ==> p ==> r`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!p q r. p /\ (q \/ r) <=> p /\ q \/ p /\ r`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!p q r. (p \/ q) /\ r <=> p /\ r \/ q /\ r`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t. (!x:A. t) = t`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t. (?x:A. t) = t`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t. ((T <=> t) <=> t) /\ ((t <=> T) <=> t) /\
+       ((F <=> t) <=> ~t) /\ ((t <=> F) <=> ~t)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(~T <=> F) /\ (~F <=> T)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t. (T /\ t <=> t) /\ (t /\ T <=> t) /\ (F /\ t <=> F) /\
+       (t /\ F <=> F) /\ (t /\ t <=> t)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t. (T \/ t <=> T) /\ (t \/ T <=> T) /\ (F \/ t <=> t) /\
+       (t \/ F <=> t) /\ (t \/ t <=> t)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!t. (T ==> t <=> t) /\ (t ==> T <=> T) /\ (F ==> t <=> T) /\
+       (t ==> t <=> T) /\ (t ==> F <=> ~t)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P:A->B->bool. (!x y. P x y) <=> (!y x. P x y)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P:A->B->bool. (?x y. P x y) <=> (?y x. P x y)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x:A. P x /\ Q x) <=> (!x. P x) /\ (!x. Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x. P x) /\ (!x. Q x) <=> (!x:A. P x /\ Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x:A. P x) /\ Q <=> (!x:A. P x /\ Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. P /\ (!x:A. Q x) <=> (!x. P /\ Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P x \/ Q x) <=> (?x. P x) \/ (?x. Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x. P x) \/ (?x. Q x) <=> (?x:A. P x \/ Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x. P x) \/ Q <=> (?x:A. P x \/ Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. P \/ (?x. Q x) <=> (?x:A. P \/ Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P x /\ Q) <=> (?x:A. P x) /\ Q`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P /\ Q x) <=> P /\ (?x:A. Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P /\ Q) <=> (?x:A. P) /\ (?x:A. Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P x) /\ Q <=> (?x:A. P x /\ Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. P /\ (?x:A. Q x) <=> (?x:A. P /\ Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P) /\ (?x:A. Q) <=> (?x:A. P /\ Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x:A. P \/ Q) <=> (!x:A. P) \/ (!x:A. Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x:A. P) \/ (!x:A. Q) <=> (!x:A. P \/ Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (P ==> !x:A. Q x) <=> (!x. P ==> Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x. P ==> Q x) <=> (P ==> !x:A. Q x)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. ((?x:A. P x) ==> Q) <=> (!x. P x ==> Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x. P x ==> Q) <=> ((?x:A. P x) ==> Q)`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (!x:A. P ==> Q) <=> ((?x:A. P) ==> (!x:A. Q))`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `!P Q. (?x:A. P ==> Q) <=> ((!x:A. P) ==> (?x:A. Q))`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+(* ------------------------------------------------------------------------- *)
+
+let tm = `a ==> ~ ~a`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(!x y. p x /\ q y ==> q x) /\ p a /\ q b ==> q a`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+let tm = `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
+     padre A D /\ padre D E /\
+     padre A B /\ padre B C
+     ==> ?X. nonno X E`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
+
+(* Example tutorial *)
+(* In the Tutorial uses TAUT (instead of ITAUT). *)
+
+let tm = 
+ `(~input_a ==> (internal <=> T)) /\
+  (~input_b ==> (output <=> internal)) /\
+  (input_a ==> (output <=> F)) /\
+  (input_b ==> (output <=> F))
+  ==> (output <=> ~(input_a \/ input_b))`;;
+time ITAUT tm;;
+get (time (solve ITAUT_SLV) tm);;
