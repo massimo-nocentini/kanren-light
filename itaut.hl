@@ -33,18 +33,8 @@ let TRACE_TAC msg : tactic = ALL_TAC;;
 let TRACE_SLV msg : solver =
   TACTIC_SLV (TRACE_TAC msg);;
 
-let DISJ_SLV (slv1:solver) (slv2:solver) : solver =
-  let DO_DISJ_SLV =
-    CONCAT_SLV (TACTIC_SLV DISJ1_TAC) (TACTIC_SLV DISJ2_TAC) in
-  fun (_,gl) as mgl ->
-    if is_disj (snd gl)
-    then THEN_SLV DO_DISJ_SLV slv1 mgl
-    else slv2 mgl;;
-
-(*
 let DISJ_SLV : solver =
   CONCAT_SLV (TACTIC_SLV DISJ1_TAC) (TACTIC_SLV DISJ2_TAC);;
-*)
 
 let INTRO_EXISTS_SLV : solver =
   fun (m,(asl,w)) as mgl ->
@@ -76,6 +66,8 @@ let REVERSIBLE_TAC : tactic =
   RIGHT_REVERSIBLE_TAC ORELSE
   FIRST_X_ASSUM LEFT_REVERSIBLE_TAC;;
 
+
+(* Versione senza variabli esistenziali. *)
 let rec DEPTH_ITAUT_SLV n : solver =
   fun mgl ->
     report ("Depth "^string_of_int n);
@@ -87,7 +79,29 @@ let rec DEPTH_ITAUT_SLV n : solver =
       (THEN_SLV (TRACE_SLV "ACCEPT")
          (COLLECT_ASSUM_SLV (fun th ->
             (SOLVER (fun mvs -> UNIFY_ACCEPT_TAC mvs th)))))
-      (DISJ_SLV (DEPTH_ITAUT_SLV (n - 1))
+      (IF_SLV DISJ_SLV
+        (FINISH_SLV (n - 1))
+        (THEN_SLV (TRACE_SLV "SUBGOAL")
+                  (SUBGOAL_SLV (FINISH_SLV (n - 2))
+                               (FINISH_SLV (n - 1))
+                               (FINISH_SLV (n - 1)))))) mgl
+    )
+and FINISH_SLV n : solver =
+  THEN_SLV (DEPTH_ITAUT_SLV n) (TACTIC_SLV NO_TAC);;
+
+let rec DEPTH_ITAUT_SLV n : solver =
+  fun mgl ->
+    report ("Depth "^string_of_int n);
+    if n <= 0 then NO_SLV mgl else
+    (
+    print_goal (snd mgl);
+    THEN_SLV (TACTIC_SLV (REPEAT REVERSIBLE_TAC))
+    (CONCAT_SLV
+      (THEN_SLV (TRACE_SLV "ACCEPT")
+         (COLLECT_ASSUM_SLV (fun th ->
+            (SOLVER (fun mvs -> UNIFY_ACCEPT_TAC mvs th)))))
+      (IF_SLV DISJ_SLV
+        (FINISH_SLV (n - 1))
         (COLLECT_SLV
            [THEN_SLV (TRACE_SLV "META_SPEC")
               (COLLECT_X_ASSUM_SLV
@@ -97,23 +111,26 @@ let rec DEPTH_ITAUT_SLV n : solver =
                        (fun g ->
                           (let gv = genvar(type_of(fst(dest_forall(concl th)))) in
                            (ASSUME_TAC th THEN META_SPEC_TAC gv th) g)))
-                     (fun g -> DEPTH_ITAUT_SLV (n - 2) g)));
+                     (fun g -> FINISH_SLV (n - 2) g)));
             THEN_SLV (TRACE_SLV "EXISTS")
-              (IF_SLV INTRO_EXISTS_SLV (DEPTH_ITAUT_SLV (n - 2))
+              (IF_SLV INTRO_EXISTS_SLV (FINISH_SLV (n - 2))
                 (THEN_SLV (TRACE_SLV "SUBGOAL")
-                  (SUBGOAL_SLV (DEPTH_ITAUT_SLV (n - 1))
-                               (DEPTH_ITAUT_SLV (n - 1))
-                               (DEPTH_ITAUT_SLV (n - 1)))))]))) mgl
-    );;
+                  (SUBGOAL_SLV (FINISH_SLV (n - 1))
+                               (FINISH_SLV (n - 1))
+                               (FINISH_SLV (n - 1)))))]))) mgl
+    )
+and FINISH_SLV n : solver =
+  THEN_SLV (DEPTH_ITAUT_SLV n) (TACTIC_SLV NO_TAC);;
+
 
 
 let ITAUT_SLV =
   let rec ITAUT_ITERDEEP_SLV n gl =
     remark ("Searching with limit "^(string_of_int n));
-    CONCAT_SLV (DEPTH_ITAUT_SLV n) (ITAUT_ITERDEEP_SLV (n + 1)) gl in
+    CONCAT_SLV (FINISH_SLV n) (ITAUT_ITERDEEP_SLV (n + 1)) gl in
   ITAUT_ITERDEEP_SLV 0;;
 
-let gstate::_ = take 2 (DEPTH_ITAUT_SLV 4 ([],([],`a ==> ~ ~a`)));;
+let gstate::_ = take 2 (FINISH_SLV 4 ([],([],`a ==> ~ ~a`)));;
 wrapup gstate;;
 
 (* Diverge perche' non fa backtrack. *)
@@ -125,17 +142,17 @@ ITAUT
      ==> ?X. nonno X E`;;
 *)
 
-(wrapup o get o DEPTH_ITAUT_SLV 6)
+(wrapup o get o FINISH_SLV 6)
   ([],([],`(!x y. p x /\ q y ==> q x) /\ p a /\ q b ==> q a`));;
 
-(wrapup o get o DEPTH_ITAUT_SLV 10)
+(wrapup o get o FINISH_SLV 10)
   ([],([],
     `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
      padre A B /\ padre B C /\
      padre A D /\ padre D E
      ==> ?X. nonno X E`));;
 
-(wrapup o get o DEPTH_ITAUT_SLV 10)
+(wrapup o get o FINISH_SLV 10)
   ([],([],
     `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
      padre A D /\ padre D E /\
@@ -146,7 +163,15 @@ ITAUT
 (* Altri tests in itaut_old/itaut.hl                                         *)
 (* ------------------------------------------------------------------------- *)
 
-let gstate = time (get o DEPTH_ITAUT_SLV 9)
+ITAUT
+  `(input_a \/ input_b ==> F) /\
+   (~input_a ==> internal) /\
+   (~input_b ==> (output <=> internal)) /\
+   (input_a ==> (output <=> F)) /\
+   (input_b ==> (output <=> F))
+   ==> output`;;
+
+let gstate = time (get o FINISH_SLV 12)
  ([],([],
   `(input_a \/ input_b ==> F) /\
    (~input_a ==> internal) /\
@@ -156,7 +181,7 @@ let gstate = time (get o DEPTH_ITAUT_SLV 9)
    ==> output`));;
 
 
-let gstate = time (get o DEPTH_ITAUT_SLV 10)
+let gstate = time (get o FINISH_SLV 8)
 ([],([],
  `(~input_a ==> internal) /\
   (~input_b ==> (output <=> internal)) /\
