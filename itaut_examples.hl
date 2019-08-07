@@ -245,7 +245,7 @@ let tm = `(!x y z. padre x y /\ padre y z ==> nonno x z) /\
      padre A D /\ padre D E /\
      padre A B /\ padre B C
      ==> ?X. nonno X E`;;
-time ITAUT tm;;
+(* time ITAUT tm;; *)
 get (time (solve ITAUT_SLV) tm);;
 
 (* Example tutorial *)

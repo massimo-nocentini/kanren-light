@@ -21,18 +21,6 @@
       (fun th -> ASSUME_TAC (EQ_MP (IMPLICATE (concl th)) th));   (* not    *)
       (CONJUNCTS_THEN' MP_TAC o uncurry CONJ o EQ_IMP_RULE)];;    (* iff    *)
 
-let TRACE_TAC msg : tactic =
-  fun gl ->
-    report msg;
-    ALL_TAC gl;;
-
-(*
-let TRACE_TAC msg : tactic = ALL_TAC;;
-*)
-
-let TRACE_SLV msg : solver =
-  TACTIC_SLV (TRACE_TAC msg);;
-
 let DISJ_SLV : solver =
   CONCAT_SLV (TACTIC_SLV DISJ1_TAC) (TACTIC_SLV DISJ2_TAC);;
 
@@ -45,11 +33,7 @@ let INTRO_EXISTS_SLV : solver =
 let SGOAL_TAC : thm_tactic =
   fun th ->
     SUBGOAL_THEN (fst(dest_imp(concl th)))
-      (fun ath ->
-         ASSUME_TAC (MP th ath) THEN
-         TRACE_TAC ("Subgoal solved:\n" ^
-                    string_of_thm ath ^ "\n" ^
-                    string_of_thm (MP th ath)));;
+      (fun ath -> ASSUME_TAC (MP th ath));;
 
 let SUBGOAL_SLV (slv1:solver) (slv2:solver) (slv3:solver) : solver =
   fun (mvs,(asl,w)) as mgl ->
@@ -66,59 +50,27 @@ let REVERSIBLE_TAC : tactic =
   RIGHT_REVERSIBLE_TAC ORELSE
   FIRST_X_ASSUM LEFT_REVERSIBLE_TAC;;
 
-(* Versione senza variabli esistenziali. *)
-(*
 let rec DEPTH_ITAUT_SLV n : solver =
   fun mgl ->
-    report ("Depth "^string_of_int n);
     if n <= 0 then NO_SLV mgl else
-    (
-    print_goal (snd mgl);
     THEN_SLV (TACTIC_SLV (REPEAT REVERSIBLE_TAC))
     (CONCAT_SLV
-      (THEN_SLV (TRACE_SLV "ACCEPT")
-         (COLLECT_ASSUM_SLV (fun th ->
-            (SOLVER (fun mvs -> UNIFY_ACCEPT_TAC mvs th)))))
-      (IF_SLV DISJ_SLV
-        (FINISH_SLV n)
-        (THEN_SLV (TRACE_SLV "SUBGOAL")
-                  (SUBGOAL_SLV (FINISH_SLV (n - 1))
-                               (FINISH_SLV (n - 1))
-                               (FINISH_SLV n))))) mgl
-    )
-and FINISH_SLV n : solver =
-  THEN_SLV (DEPTH_ITAUT_SLV n) (TACTIC_SLV NO_TAC);;
-*)
-
-let rec DEPTH_ITAUT_SLV n : solver =
-  fun mgl ->
-    report ("Depth "^string_of_int n);
-    if n <= 0 then NO_SLV mgl else
-    (
-    print_goal (snd mgl);
-    THEN_SLV (TACTIC_SLV (REPEAT REVERSIBLE_TAC))
-    (CONCAT_SLV
-      (THEN_SLV (TRACE_SLV "ACCEPT")
-         (COLLECT_ASSUM_SLV (fun th ->
-            (SOLVER (fun mvs -> UNIFY_ACCEPT_TAC mvs th)))))
+       (COLLECT_ASSUM_SLV (fun th ->
+         (SOLVER (fun mvs -> UNIFY_ACCEPT_TAC mvs th))))
       (COLLECT_SLV
          [THEN_SLV DISJ_SLV (FINISH_SLV n);
-          THEN_SLV (TRACE_SLV "META_SPEC")
-            (COLLECT_X_ASSUM_SLV
-               (fun th ->
-                 THEN_SLV
-                   (TACTIC_SLV
-                     (fun g ->
-                        (let gv = genvar(type_of(fst(dest_forall(concl th)))) in
-                         (ASSUME_TAC th THEN META_SPEC_TAC gv th) g)))
-                   (fun g -> FINISH_SLV (n - 2) g)));
-          THEN_SLV (TRACE_SLV "EXISTS")
-            (IF_SLV INTRO_EXISTS_SLV (FINISH_SLV (n - 2))
-              (THEN_SLV (TRACE_SLV "SUBGOAL")
-                (SUBGOAL_SLV (FINISH_SLV (n - 1))
-                             (FINISH_SLV (n - 1))
-                             (FINISH_SLV n))))])) mgl
-    )
+          (COLLECT_X_ASSUM_SLV
+             (fun th ->
+                THEN_SLV
+                  (TACTIC_SLV
+                    (fun g ->
+                       (let gv = genvar(type_of(fst(dest_forall(concl th)))) in
+                        (ASSUME_TAC th THEN META_SPEC_TAC gv th) g)))
+                  (fun g -> FINISH_SLV (n - 2) g)));
+          (IF_SLV INTRO_EXISTS_SLV (FINISH_SLV (n - 2))
+             (SUBGOAL_SLV (FINISH_SLV (n - 1))
+                          (FINISH_SLV (n - 1))
+                          (FINISH_SLV n)))])) mgl
 and FINISH_SLV n : solver =
   THEN_SLV (DEPTH_ITAUT_SLV n) (TACTIC_SLV NO_TAC);;
 
