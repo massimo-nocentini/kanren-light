@@ -1,12 +1,26 @@
 (* ========================================================================= *)
 (* Semicertified interactive logic programming.                              *)
 (*                                                                           *)
-(* Copyright (c) 2017-2018 Marco Maggesi, Massimo Nocentini                  *)
+(* Copyright (c) 2017-2019 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
 
 (* ------------------------------------------------------------------------- *)
 (* Examples from The Mystery of the Monte Carlo Lock.                        *)
 (* ------------------------------------------------------------------------- *)
+
+(* ------------------------------------------------------------------------- *)
+(* Miscellanea on lists.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+g `!l:A list. l = APPEND [] l`;;
+e (REWRITE_TAC[APPEND]);;
+let REFL_APPEND_NIL = top_thm();;
+
+g `!h:A t t' l1 l2.
+     l1 = CONS h t' /\ t = APPEND t' l2 ==> CONS h t = APPEND l1 l2`;;
+e (REPEAT STRIP_TAC THEN REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC));;
+e (REWRITE_TAC[APPEND]);;
+let CONS_EQ_APPEND = top_thm();;
 
 (* ------------------------------------------------------------------------- *)
 (* First example.                                                            *)
@@ -22,22 +36,28 @@ g `!x y z. LOCK x y /\ z = APPEND y (CONS 2 y) ==> LOCK (CONS 3 x) z`;;
 e (MESON_TAC[LOCK_RULE2]);;
 let LOCK_RULE2' = top_thm();;
 
+(* ------------------------------------------------------------------------- *)
+(* Solution using tactics.                                                   *)
+(* ------------------------------------------------------------------------- *)
+
 g `LOCK [3;2;3] [3;2;3]`;;
-e (GEN_REWRITE_TAC RAND_CONV
-     [GSYM (REWRITE_CONV [APPEND] `APPEND [3] [2;3]`)]);;
-e (MATCH_MP_TAC LOCK_RULE2);;
+e (MATCH_MP_TAC LOCK_RULE2');;
+e (EXISTS_TAC `[3]`);;
+e (REWRITE_TAC[APPEND]);;
 e (MATCH_ACCEPT_TAC LOCK_RULE1);;
-let yeah = top_thm();;
+top_thm();;
 
-g `!l:A list. l = APPEND [] l`;;
-e (REWRITE_TAC[APPEND]);;
-let REFL_APPEND_NIL = top_thm();;
+MESON
+  [LOCK_RULES; APPEND]
+  `LOCK [3;2;3] [3;2;3]`;;
 
-g `!h:A t t' l1 l2.
-     l1 = CONS h t' /\ t = APPEND t' l2 ==> CONS h t = APPEND l1 l2`;;
-e (REPEAT STRIP_TAC THEN REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC));;
-e (REWRITE_TAC[APPEND]);;
-let CONS_EQ_APPEND = top_thm();;
+METIS
+  [LOCK_RULES; APPEND]
+  `LOCK [3;2;3] [3;2;3]`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Solution using solvers.                                                   *)
+(* ------------------------------------------------------------------------- *)
 
 gg `??x. LOCK x x`;;
 ee (APPLY_SLV LOCK_RULE1);;
@@ -62,9 +82,14 @@ let STEP_SLV : solver =
      ACCEPT_SLV REFL_APPEND_NIL;
      RULE_SLV CONS_EQ_APPEND];;
 
+(* Non funziona. *)
+(* Viola un invariante: la soluzione trovata dal solver
+   non è una istanza della query. *)
+(*
 let rec SEARCH_SLV : solver =
   fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
                       (THEN_SLV STEP_SLV SEARCH_SLV) g;;
+*)
 
 let rec SEARCH_SLV : solver =
   REPEAT_SLV STEP_SLV;;
@@ -90,8 +115,12 @@ let LOCK2_RULES,LOCK2_INDUCT,LOCK2_CASES = new_inductive_definition
 
 let [L1;L2;L3;L4] = CONJUNCTS LOCK2_RULES;;
 
+let L3' = prove
+ (`!x y z. z = REVERSE y /\ LOCK2 x y ==> LOCK2 (CONS 4 x) z`,
+  MESON_TAC[L3]);;
+
 let L4' = prove
- (`!x y z. LOCK2 x y /\ z = APPEND y y ==> LOCK2 (CONS 5 x) z`,
+ (`!x y z. z = APPEND y y /\ LOCK2 x y ==> LOCK2 (CONS 5 x) z`,
   MESON_TAC[L4]);;
 
 g `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
@@ -101,6 +130,7 @@ e (REWRITE_TAC[APPEND]);;
 e (MATCH_MP_TAC L4');;
 e (EXISTS_TAC `[5;4;6;4;2]`);;
 e CONJ_TAC;;
+e REFL_TAC;;
 e (GEN_REWRITE_TAC RAND_CONV [GSYM (REWRITE_CONV [REVERSE; APPEND]
      `REVERSE [2;4;6;4;5]`)]);;
 e (MATCH_MP_TAC L3);;
@@ -111,5 +141,119 @@ e (MATCH_MP_TAC L3);;
 e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND]
      `(CONS 2 (APPEND [5;4;6;4] [2]))`)]);;
 e (MATCH_ACCEPT_TAC L1);;
-e REFL_TAC;;
 top_thm();;
+
+let LIST_EQ_SLV : solver =
+  REPEAT_SLV
+    (COLLECT_SLV
+       [REFL_SLV;
+        APPLY_SLV REFL_APPEND_NIL;
+        APPLY_SLV CONS_EQ_APPEND;
+        TACTIC_SLV ALL_TAC]);;
+
+let L4'_SLV : solver =
+  THEN_SLV (APPLY_SLV L4')
+           (THENL_SLV (TACTIC_SLV CONJ_TAC)
+                      [TACTIC_SLV ALL_TAC;
+                       LIST_EQ_SLV]);;
+
+let CONS_EQ_APPEND_SLV : solver =
+  THENL_SLV
+     (TACTIC_SLV
+        (MATCH_MP_TAC CONS_EQ_APPEND THEN
+         META_EXISTS_TAC THEN
+         CONJ_TAC))
+  [REFL_SLV; TACTIC_SLV ALL_TAC];;
+
+let LIST_CLAUSES = prove
+ (`(!l1 l2:A list. l1 = [] /\ l2 = [] ==> APPEND l1 l2 = []) /\
+   (!l1 l2:A list. l1 = [] /\ l2 = [] ==> [] = APPEND l1 l2) /\
+   (!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> CONS h t = APPEND l1 l2) /\
+   (!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> APPEND l1 l2 = CONS h t) /\
+   (!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> APPEND l1 l2 = CONS h t) /\
+   (!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> CONS h t = APPEND l1 l2) /\
+   (!l1 l2 m1 m2 x:A list. APPEND l1 l2 = x /\ APPEND m1 m2 = x ==> APPEND l1 l2 = APPEND m1 m2)`,
+  SIMP_TAC[APPEND]);;
+
+let LIST_LEMMAS = CONJUNCTS LIST_CLAUSES;;
+
+(* TODO: Serve? *)
+let REVERSE_CLAUSES_ALT = prove
+ (`(!l:A list. l = [] ==> l = REVERSE []) /\
+  (!h:A t l s. APPEND s [h] = l /\ s = REVERSE t ==> l = REVERSE (CONS h t))`,
+  CONJ_TAC THENL
+  [MESON_TAC[REVERSE_EQ_EMPTY];
+   REWRITE_TAC[REVERSE] THEN MESON_TAC[]]);;
+
+let REVERSE_CLAUSES = prove
+ (`(!l:A list. l = [] ==> [] = REVERSE l) /\
+   (!l h:A t s. l = APPEND s [h] /\ t = REVERSE s ==> CONS h t = REVERSE l)`,
+  CONJ_TAC THENL
+  [MESON_TAC[REVERSE_EQ_EMPTY]; ALL_TAC] THEN
+  LIST_INDUCT_TAC THENL
+  [MESON_TAC[APPEND_EQ_NIL; NOT_CONS_NIL]; ALL_TAC] THEN
+  REPEAT GEN_TAC THEN REWRITE_TAC[REVERSE] THEN
+  POP_ASSUM MP_TAC THEN
+  STRUCT_CASES_TAC (ISPEC `t:A list` list_CASES) THEN
+  STRUCT_CASES_TAC (ISPEC `s:A list` list_CASES) THEN
+  REWRITE_TAC[REVERSE; APPEND; CONS_11] THEN
+  MESON_TAC[APPEND_EQ_NIL; NOT_CONS_NIL; APPEND]);;
+
+let REVERSE_LEMMAS = CONJUNCTS REVERSE_CLAUSES;;
+
+let FALSE_SLV : solver =
+  fun (_,(_,w)) as mgl ->
+    if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
+
+let LIST_SIMPL_SLV : solver =
+  THEN_SLV (TACTIC_SLV
+             (REWRITE_TAC[APPEND; REVERSE;
+                          APPEND_EQ_NIL; REVERSE_EQ_EMPTY;
+                          CONS_11; NOT_CONS_NIL]))
+           (THEN_SLV FALSE_SLV
+                     (TACTIC_SLV (REPEAT CONJ_TAC)));;
+
+let LIST_EQ_STEP_SLV : solver =
+  THEN_SLV LIST_SIMPL_SLV
+    (CONCAT_SLV
+       REFL_SLV
+       (THEN_SLV (MAP_COLLECT_SLV APPLY_SLV (LIST_LEMMAS @ REVERSE_LEMMAS))
+                 (TACTIC_SLV CONJ_TAC)));;
+
+let LIST_EQ_SLV : solver =
+  THEN_SLV (REPEAT_SLV LIST_EQ_STEP_SLV)
+           LIST_SIMPL_SLV;;
+
+gg `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
+tt (MATCH_MP_TAC L4' THEN META_EXISTS_TAC THEN CONJ_TAC);;
+ee LIST_EQ_SLV;;
+tt (MATCH_MP_TAC L3' THEN META_EXISTS_TAC THEN CONJ_TAC);;
+ee LIST_EQ_STEP_SLV;;
+ee LIST_EQ_SLV;;
+ee LIST_EQ_STEP_SLV;;
+ee LIST_EQ_SLV;;
+ee LIST_EQ_STEP_SLV;;
+ee LIST_EQ_SLV;;
+ee LIST_EQ_STEP_SLV;;
+ee LIST_EQ_SLV;;
+ee LIST_EQ_STEP_SLV;;
+ee LIST_EQ_SLV;;
+
+ee LIST_SIMPL_SLV;;
+
+
+ee (L4'_SLV);;
+ee (THENL_SLV (TACTIC_SLV CONJ_TAC)
+    [TACTIC_SLV ALL_TAC;
+     THENL_SLV (APPLY_SLV CONS_EQ_APPEND)
+        [REFL_SLV;
+         APPLY_SLV CONS_EQ_APPEND]]);;
+
+
+MESON
+  [LOCK2_RULES; REVERSE; APPEND; REFL_APPEND_NIL; CONS_EQ_APPEND]
+  `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
+
+METIS
+  [LOCK2_RULES; REVERSE; APPEND; REFL_APPEND_NIL; CONS_EQ_APPEND]
+  `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
