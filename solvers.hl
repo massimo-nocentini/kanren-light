@@ -328,20 +328,17 @@ let ss () =
 let tt : tactic -> mgoalstack =
   fun tac -> ee (TACTIC_SLV tac);;
 
-let top_thms : unit -> (instantiation * thm) stream =
-  let safe_wrapup gstate =
-    try wrapup gstate with Failure s ->
-      (report ("wrapup error: "^s);
-       ([],null_inst),TRUTH) in
-  let p gstate =
-    let (mvs,i),th = safe_wrapup gstate in
-    i,th in
+let top_thms : unit -> (instantiation * thm) option stream =
+  let wrapup_maybe gstate =
+    try let (mvs,i),th = (wrapup gstate) in
+        Some (i,th)
+    with Failure s -> None in
   fun () ->
     match !current_mgoalstack with
       [] -> failwith "top_thms: Goalstack empty"
-    | s :: _ -> stream_map p s;;
+    | s :: _ -> stream_map wrapup_maybe s;;
 
-let top_thm1() : instantiation * thm =
+let top_thm1() : (instantiation * thm) option =
   get (top_thms());;
 
 (*
