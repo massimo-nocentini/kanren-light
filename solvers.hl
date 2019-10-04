@@ -84,13 +84,15 @@ let SOLVER (f:term list -> tactic) : solver =
 let NO_SLV : solver =
   fun _ -> Empty;;
 
-let REFL_SLV =
-  SOLVER (fun mvs (asl,w) ->
+let UNIFY_REFL_TAC : term list -> tactic =
+  fun mvs (asl,w) ->
     let l,r = dest_eq w in
     let inst = term_ty_unify mvs l r in
     let sth = ALPHA (instantiate inst l) (instantiate inst r) in
     let just i _ = INSTANTIATE_ALL i sth in
-    ([],inst),[],just);;
+    ([],inst),[],just;;
+
+let REFL_SLV : solver = SOLVER UNIFY_REFL_TAC;;
 
 (* ------------------------------------------------------------------------- *)
 (* Refresh type variables in a theorem.                                      *)
