@@ -1,3 +1,4 @@
+- Sistemare secondo esempio della cassaforte.
 - File separato di solvers per l'aritmetica? E test separati.
 - Test?
 - Macchine di turing.
