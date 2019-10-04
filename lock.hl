@@ -82,21 +82,31 @@ let STEP_SLV : solver =
      ACCEPT_SLV REFL_APPEND_NIL;
      RULE_SLV CONS_EQ_APPEND];;
 
-(* Non funziona. *)
-(* Viola un invariante: la soluzione trovata dal solver
-   non è una istanza della query. *)
-(*
-let rec SEARCH_SLV : solver =
-  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
-                      (THEN_SLV STEP_SLV SEARCH_SLV) g;;
-*)
-
 let rec SEARCH_SLV : solver =
   REPEAT_SLV STEP_SLV;;
 
 gg `??x. LOCK x x`;;
 ee SEARCH_SLV;;
 let sols = top_thms();;
+
+(* Alternative method. *)
+let rec SEARCH_ALT_SLV : solver =
+  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
+                      (THEN_SLV STEP_SLV SEARCH_SLV) g;;
+
+gg `??x. LOCK x x`;;
+ee SEARCH_ALT_SLV;;
+
+let default : 'a option -> 'a =
+  function
+      Some x -> x
+    | None -> failwith "default";;
+
+let sols = stream_mapfilter default (top_thms ());;
+(* [3;2;3] è l'unico punto fisso, se cerchiamo altre soluzioni diverge.
+   drop 1 sols;;
+*)
+
 
 (* ------------------------------------------------------------------------- *)
 (* Second example.                                                           *)
