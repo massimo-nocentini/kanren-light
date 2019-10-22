@@ -33,3 +33,13 @@
 | -------------------- | -------------------------------------------------
 | solvers_test.hl      | Tests for basic solvers
 | list_solvers_test.hl | Tests for lists solvers
+
+## How to load this code using Nix
+
+```shell
+nix-shell -p hol_light
+rlwrap hol_light
+loads "update_database.ml";;
+load_path := <<topdir>> :: !load_path;;
+loadt "kanren_light/make.hl";;
+```
