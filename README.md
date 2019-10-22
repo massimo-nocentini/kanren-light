@@ -39,7 +39,10 @@
 ```shell
 nix-shell -p hol_light
 rlwrap hol_light
+```
+
+```ocaml
 loads "update_database.ml";;
-load_path := <<topdir>> :: !load_path;;
-loadt "kanren_light/make.hl";;
+load_path := !load_path @ [ "<<topdir>>" ];;
+loadt "kanren-light/make.hl";;
 ```
