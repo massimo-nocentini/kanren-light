@@ -1,4 +1,5 @@
 - Sistemare secondo esempio della cassaforte.
+- Quine: sistemare (usare il goal come constraint? Vedi: FALSE_SLV)
 - File separato di solvers per l'aritmetica? E test separati.
 - Test?
 - Macchine di turing.
