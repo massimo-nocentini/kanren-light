@@ -9,6 +9,15 @@
 (* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
+(* Further solvers.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+(* Cut goals of the form ?- F *)
+let FALSE_SLV : solver =
+  fun (_,(_,w)) as mgl ->
+    if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
+
+(* ------------------------------------------------------------------------- *)
 (* Miscellanea on lists.                                                     *)
 (* ------------------------------------------------------------------------- *)
 
@@ -21,6 +30,18 @@ g `!h:A t t' l1 l2.
 e (REPEAT STRIP_TAC THEN REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC));;
 e (REWRITE_TAC[APPEND]);;
 let CONS_EQ_APPEND = top_thm();;
+
+let REVAPPEND = new_definition
+  `REVAPPEND p t : A list = APPEND (REVERSE p) t`;;
+
+let REVAPPEND_CLAUSES = prove
+ (`(!t:A list. REVAPPEND [] t = t) /\
+   (!x:A p t. REVAPPEND (CONS x p) t = REVAPPEND p (CONS x t))`,
+  REWRITE_TAC[REVAPPEND; REVERSE; APPEND; GSYM APPEND_ASSOC]);;
+
+let REVERSE_EQ_REVAPPEND = prove
+ (`!l:A list. REVERSE l = REVAPPEND l []`,
+e (REWRITE_TAC[REVAPPEND; APPEND_NIL]);;
 
 (* ------------------------------------------------------------------------- *)
 (* First example.                                                            *)
@@ -208,11 +229,6 @@ let APPEND_REVAPPEND_CONS_RULE_EQ = prove
 let EQ_APPEND_NIL = prove
   (`!l1 l2:A list. l1 = l2 ==> l1 = APPEND [] l2`,
    REWRITE_TAC[APPEND]);;
-
-(* Cut goals of the form ?- F *)
-let FALSE_SLV : solver =
-  fun (_,(_,w)) as mgl ->
-    if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
 
 gg `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
 ee (THEN_SLV (APPLY_SLV L4') (TACTIC_SLV CONJ_TAC));;
