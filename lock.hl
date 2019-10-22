@@ -94,15 +94,14 @@ let rec SEARCH_ALT_SLV : solver =
   fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
                       (THEN_SLV STEP_SLV SEARCH_SLV) g;;
 
-gg `??x. LOCK x x`;;
-ee SEARCH_ALT_SLV;;
-
 let default : 'a option -> 'a =
   function
       Some x -> x
     | None -> failwith "default";;
 
-let sols = stream_mapfilter default (top_thms ());;
+gg `??x. LOCK x x`;;
+ee SEARCH_ALT_SLV;;
+let sols_alt = stream_mapfilter default (top_thms ());;
 (* [3;2;3] è l'unico punto fisso, se cerchiamo altre soluzioni diverge.
    drop 1 sols;;
 *)
@@ -124,6 +123,10 @@ let LOCK2_RULES,LOCK2_INDUCT,LOCK2_CASES = new_inductive_definition
    (!x y. LOCK2 x y ==> LOCK2 (CONS 5 x) (APPEND y y))`;;
 
 let [L1;L2;L3;L4] = CONJUNCTS LOCK2_RULES;;
+
+let L1' = prove
+ (`!x y. x = APPEND y [2] ==> LOCK2 (CONS 2 x) y`,
+  MESON_TAC[L1]);;
 
 let L3' = prove
  (`!x y z. z = REVERSE y /\ LOCK2 x y ==> LOCK2 (CONS 4 x) z`,
@@ -153,7 +156,90 @@ e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND]
 e (MATCH_ACCEPT_TAC L1);;
 top_thm();;
 
-let LIST_EQ_SLV : solver =
+(* ------------------------------------------------------------------------- *)
+(* HIC SUNT LEONES!!!                                                        *)
+(* ------------------------------------------------------------------------- *)
+
+let LIST_CLAUSES = prove
+ (`(!l1 l2:A list. l1 = [] /\ l2 = [] ==> APPEND l1 l2 = []) /\
+   (!l1 l2:A list. l1 = [] /\ l2 = [] ==> [] = APPEND l1 l2) /\
+   (!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> CONS h t = APPEND l1 l2) /\
+   (!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> APPEND l1 l2 = CONS h t) /\
+   (!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> APPEND l1 l2 = CONS h t) /\
+   (!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> CONS h t = APPEND l1 l2) /\
+   (!l1 l2 m1 m2 x:A list. APPEND l1 l2 = x /\ APPEND m1 m2 = x ==> APPEND l1 l2 = APPEND m1 m2)`,
+  SIMP_TAC[APPEND]);;
+
+let APPEND_NIL_CLAUSE = prove
+ (`[]:A list = APPEND [] []`,
+  REWRITE_TAC[APPEND]);;
+
+let APPEND_CONS_CLAUSE = prove
+ (`!x:A l l'. l' = APPEND l (CONS x l)
+              ==> CONS x l' = APPEND (CONS x l) (CONS x l)`,
+  SIMP_TAC[APPEND]);;
+
+let APPEND_CONS_CLAUSE_EQ = prove
+ (`!x:A l l'.
+    CONS x l' = APPEND (CONS x l) (CONS x l) <=> l' = APPEND l (CONS x l)`,
+  REWRITE_TAC[APPEND; CONS_11]);;
+
+let CONS_APPEND_SLV : solver =
+  MAP_COLLECT_SLV APPLY_SLV [APPEND_NIL_CLAUSE; APPEND_CONS_CLAUSE];;
+
+let REVAPPEND = new_definition
+  `REVAPPEND p t : A list = APPEND (REVERSE p) t`;;
+
+let REVAPPEND_CLAUSES = prove
+ (`(!t:A list. REVAPPEND [] t = t) /\
+   (!x:A p t. REVAPPEND (CONS x p) t = REVAPPEND p (CONS x t))`,
+  REWRITE_TAC[REVAPPEND; REVERSE; APPEND; GSYM APPEND_ASSOC]);;
+
+let APPEND_APPEND_INTRO_CLAUSE = prove
+ (`!l t:A list. l = APPEND t (REVAPPEND [] t) ==> l = APPEND t t`,
+  REWRITE_TAC[REVAPPEND_CLAUSES]);;
+
+let APPEND_REVAPPEND_NIL_CLAUSE = prove
+ (`[]:A list = APPEND [] (REVAPPEND [] [])`,
+  REWRITE_TAC[APPEND; REVAPPEND_CLAUSES]);;
+
+let APPEND_REVAPPEND_CONS_CLAUSE = prove
+ (`!x:A p t l. l = APPEND t (REVAPPEND (CONS x p) t)
+               ==> CONS x l = APPEND (CONS x t) (REVAPPEND p (CONS x t))`,
+  REWRITE_TAC[REVAPPEND_CLAUSES; APPEND; CONS_11]);;
+
+let APPEND_REVAPPEND_CONS_CLAUSE_EQ = prove
+ (`!x:A p t l. CONS x l = APPEND (CONS x t) (REVAPPEND p (CONS x t)) <=>
+               l = APPEND t (REVAPPEND (CONS x p) t)`,
+  REWRITE_TAC[REVAPPEND_CLAUSES; APPEND; CONS_11]);;
+
+let EQ_APPEND_NIL = prove
+  (`!l1 l2:A list. l1 = l2 ==> l1 = APPEND [] l2`,
+   REWRITE_TAC[APPEND]);;
+
+(* Cut goals of the form ?- F *)
+let FALSE_SLV : solver =
+  fun (_,(_,w)) as mgl ->
+    if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
+
+gg `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
+ee (THEN_SLV (APPLY_SLV L4') (TACTIC_SLV CONJ_TAC));;
+ee (APPLY_SLV APPEND_APPEND_INTRO_CLAUSE);;
+
+ee (APPLY_SLV APPEND_REVAPPEND_CONS_CLAUSE);;
+
+ee (THEN_SLV (APPLY_SLV EQ_APPEND_NIL)
+     (THEN_SLV (TACTIC_SLV (REWRITE_TAC[REVAPPEND_CLAUSES; NOT_CONS_NIL])
+               FALSE_SLV)));;
+
+
+
+ee CONS_APPEND_SLV;;
+ee (APPLY_SLV APPEND_CONS_CLAUSE);;
+ee CONS_APPEND_SLV;;
+ss();;
+
+let LIST_EQ_APPEND_SLV : solver =
   REPEAT_SLV
     (COLLECT_SLV
        [REFL_SLV;
@@ -165,7 +251,7 @@ let L4'_SLV : solver =
   THEN_SLV (APPLY_SLV L4')
            (THENL_SLV (TACTIC_SLV CONJ_TAC)
                       [TACTIC_SLV ALL_TAC;
-                       LIST_EQ_SLV]);;
+                       LIST_EQ_APPEND_SLV]);;
 
 let CONS_EQ_APPEND_SLV : solver =
   THENL_SLV
@@ -174,16 +260,6 @@ let CONS_EQ_APPEND_SLV : solver =
          META_EXISTS_TAC THEN
          CONJ_TAC))
   [REFL_SLV; TACTIC_SLV ALL_TAC];;
-
-let LIST_CLAUSES = prove
- (`(!l1 l2:A list. l1 = [] /\ l2 = [] ==> APPEND l1 l2 = []) /\
-   (!l1 l2:A list. l1 = [] /\ l2 = [] ==> [] = APPEND l1 l2) /\
-   (!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> CONS h t = APPEND l1 l2) /\
-   (!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> APPEND l1 l2 = CONS h t) /\
-   (!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> APPEND l1 l2 = CONS h t) /\
-   (!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> CONS h t = APPEND l1 l2) /\
-   (!l1 l2 m1 m2 x:A list. APPEND l1 l2 = x /\ APPEND m1 m2 = x ==> APPEND l1 l2 = APPEND m1 m2)`,
-  SIMP_TAC[APPEND]);;
 
 let LIST_LEMMAS = CONJUNCTS LIST_CLAUSES;;
 
@@ -211,9 +287,6 @@ let REVERSE_CLAUSES = prove
 
 let REVERSE_LEMMAS = CONJUNCTS REVERSE_CLAUSES;;
 
-let FALSE_SLV : solver =
-  fun (_,(_,w)) as mgl ->
-    if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
 
 let LIST_SIMPL_SLV : solver =
   THEN_SLV (TACTIC_SLV
@@ -225,45 +298,124 @@ let LIST_SIMPL_SLV : solver =
 
 let LIST_EQ_STEP_SLV : solver =
   THEN_SLV LIST_SIMPL_SLV
-    (CONCAT_SLV
-       REFL_SLV
-       (THEN_SLV (MAP_COLLECT_SLV APPLY_SLV (LIST_LEMMAS @ REVERSE_LEMMAS))
-                 (TACTIC_SLV CONJ_TAC)));;
+    (COLLECT_SLV
+      [REFL_SLV;
+       TACTIC_SLV CONJ_TAC;
+       MAP_COLLECT_SLV APPLY_SLV (LIST_LEMMAS @ REVERSE_LEMMAS)]);;
 
-let LIST_EQ_SLV : solver =
+let LIST_EQ_APPEND_SLV : solver =
   THEN_SLV (REPEAT_SLV LIST_EQ_STEP_SLV)
            LIST_SIMPL_SLV;;
 
+(* Example. *)
+gg `??l. [1;2;3] = REVERSE l`;;
+ee LIST_EQ_APPEND_SLV;;
+top_thms();;
+
+let LOCK2_SLV : solver = MAP_COLLECT_SLV APPLY_SLV [L1; L2; L3'; L4'];;
+
+let L1_SLV : solver = THEN_SLV (APPLY_SLV L1') LIST_EQ_APPEND_SLV;;
+let L2_SLV : solver = APPLY_SLV L2;;
+let L3_SLV : solver =
+  THEN_SLV (APPLY_SLV L3')
+    (THENL_SLV (TACTIC_SLV CONJ_TAC)
+       [LIST_EQ_APPEND_SLV; TACTIC_SLV ALL_TAC]);;
+let L4_SLV : solver =
+  THEN_SLV (APPLY_SLV L4')
+    (THENL_SLV (TACTIC_SLV CONJ_TAC)
+      [LIST_EQ_APPEND_SLV; TACTIC_SLV ALL_TAC]);;
+
+let CONS_EQ_APPEND_NIL = prove
+ (`!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> CONS h t = APPEND l1 l2`,
+  MESON_TAC[APPEND]);;
+
+let CONS_EQ_APPEND_CONS = prove
+(`!h:A t l1 l2 s. l1 = CONS h s /\ t = APPEND s l2 ==> CONS h t = APPEND l1 l2`,
+  MESON_TAC[APPEND]);;
+
 gg `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
-tt (MATCH_MP_TAC L4' THEN META_EXISTS_TAC THEN CONJ_TAC);;
-ee LIST_EQ_SLV;;
-tt (MATCH_MP_TAC L3' THEN META_EXISTS_TAC THEN CONJ_TAC);;
-ee LIST_EQ_STEP_SLV;;
-ee LIST_EQ_SLV;;
-ee LIST_EQ_STEP_SLV;;
-ee LIST_EQ_SLV;;
-ee LIST_EQ_STEP_SLV;;
-ee LIST_EQ_SLV;;
-ee LIST_EQ_STEP_SLV;;
-ee LIST_EQ_SLV;;
-ee LIST_EQ_STEP_SLV;;
-ee LIST_EQ_SLV;;
+ee (APPLY_SLV L4');;
+tt CONJ_TAC;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_NIL);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee REFL_SLV;;
+ee (APPLY_SLV L3');;
+tt CONJ_TAC;;
+ee LIST_EQ_APPEND_SLV;;
+tt (REWRITE_TAC[APPEND]);;
+ee (APPLY_SLV L2);;
+ee (APPLY_SLV L3');;
+tt CONJ_TAC;;
+ee LIST_EQ_APPEND_SLV;;
+tt (REWRITE_TAC[APPEND]);;
+ee (APPLY_SLV L1');;
+tt (REWRITE_TAC[APPEND]);;
+let Cons (Some (_, th), _) = top_thms();;
 
-ee LIST_SIMPL_SLV;;
-
-
-ee (L4'_SLV);;
-ee (THENL_SLV (TACTIC_SLV CONJ_TAC)
-    [TACTIC_SLV ALL_TAC;
-     THENL_SLV (APPLY_SLV CONS_EQ_APPEND)
-        [REFL_SLV;
-         APPLY_SLV CONS_EQ_APPEND]]);;
-
-
-MESON
+(*
+time MESON
   [LOCK2_RULES; REVERSE; APPEND; REFL_APPEND_NIL; CONS_EQ_APPEND]
   `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
 
-METIS
+time METIS
   [LOCK2_RULES; REVERSE; APPEND; REFL_APPEND_NIL; CONS_EQ_APPEND]
   `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
+*)
+
+gg `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
+ee (THEN_SLV (APPLY_SLV L4') (TACTIC_SLV CONJ_TAC));;
+ee (APPLY_SLV EQ_APPEND_NIL);;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+
+tt (TACTIC_SLV CONJ_TAC);;
+ee REFL_SLV;;
+tt (THEN_SLV (REWRITE_TAC[NOT_CONS_NIL]) FALSE_SLV);;
+
+
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_CONS);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee (APPLY_SLV CONS_EQ_APPEND_NIL);;
+tt CONJ_TAC;;
+ee REFL_SLV;;
+ee REFL_SLV;;
+ee (APPLY_SLV L3');;
+tt CONJ_TAC;;
+ee LIST_EQ_APPEND_SLV;;
+tt (REWRITE_TAC[APPEND]);;
+ee (APPLY_SLV L2);;
+ee (APPLY_SLV L3');;
+tt CONJ_TAC;;
+ee LIST_EQ_APPEND_SLV;;
+tt (REWRITE_TAC[APPEND]);;
+ee (APPLY_SLV L1');;
+tt (REWRITE_TAC[APPEND]);;
+let Cons (Some (_, th), _) = top_thms();;
