@@ -68,7 +68,8 @@ print_endline "Fine test: prolog length";;
 print_endline "Inizio test: prolog append";;
 
 let APPEND_SLV : solver =
-  REPEAT_SLV (CONCAT_SLV (ACCEPT_SLV APPEND_NIL) (RULE_SLV APPEND_CONS));;
+  REPEAT_SLV (CONCAT_SLV (ACCEPT_SLV APPEND_NIL_CLAUSE)
+             (RULE_SLV APPEND_CONS_CLAUSE));;
 
 take 10 (solve APPEND_SLV
                `??a b x y z. APPEND [1;a;3] [b;5] = [x;2;3;y;z]`);;

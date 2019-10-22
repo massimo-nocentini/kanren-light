@@ -170,45 +170,37 @@ let LIST_CLAUSES = prove
    (!l1 l2 m1 m2 x:A list. APPEND l1 l2 = x /\ APPEND m1 m2 = x ==> APPEND l1 l2 = APPEND m1 m2)`,
   SIMP_TAC[APPEND]);;
 
-let APPEND_NIL_CLAUSE = prove
+let APPEND_NIL_RULE = prove
  (`[]:A list = APPEND [] []`,
   REWRITE_TAC[APPEND]);;
 
-let APPEND_CONS_CLAUSE = prove
+let APPEND_CONS_RULE = prove
  (`!x:A l l'. l' = APPEND l (CONS x l)
               ==> CONS x l' = APPEND (CONS x l) (CONS x l)`,
   SIMP_TAC[APPEND]);;
 
-let APPEND_CONS_CLAUSE_EQ = prove
+let APPEND_CONS_RULE_EQ = prove
  (`!x:A l l'.
     CONS x l' = APPEND (CONS x l) (CONS x l) <=> l' = APPEND l (CONS x l)`,
   REWRITE_TAC[APPEND; CONS_11]);;
 
 let CONS_APPEND_SLV : solver =
-  MAP_COLLECT_SLV APPLY_SLV [APPEND_NIL_CLAUSE; APPEND_CONS_CLAUSE];;
-
-let REVAPPEND = new_definition
-  `REVAPPEND p t : A list = APPEND (REVERSE p) t`;;
-
-let REVAPPEND_CLAUSES = prove
- (`(!t:A list. REVAPPEND [] t = t) /\
-   (!x:A p t. REVAPPEND (CONS x p) t = REVAPPEND p (CONS x t))`,
-  REWRITE_TAC[REVAPPEND; REVERSE; APPEND; GSYM APPEND_ASSOC]);;
+  MAP_COLLECT_SLV APPLY_SLV [APPEND_NIL_RULE; APPEND_CONS_RULE];;
 
 let APPEND_APPEND_INTRO_CLAUSE = prove
  (`!l t:A list. l = APPEND t (REVAPPEND [] t) ==> l = APPEND t t`,
   REWRITE_TAC[REVAPPEND_CLAUSES]);;
 
-let APPEND_REVAPPEND_NIL_CLAUSE = prove
+let APPEND_REVAPPEND_NIL_RULE = prove
  (`[]:A list = APPEND [] (REVAPPEND [] [])`,
   REWRITE_TAC[APPEND; REVAPPEND_CLAUSES]);;
 
-let APPEND_REVAPPEND_CONS_CLAUSE = prove
+let APPEND_REVAPPEND_CONS_RULE = prove
  (`!x:A p t l. l = APPEND t (REVAPPEND (CONS x p) t)
                ==> CONS x l = APPEND (CONS x t) (REVAPPEND p (CONS x t))`,
   REWRITE_TAC[REVAPPEND_CLAUSES; APPEND; CONS_11]);;
 
-let APPEND_REVAPPEND_CONS_CLAUSE_EQ = prove
+let APPEND_REVAPPEND_CONS_RULE_EQ = prove
  (`!x:A p t l. CONS x l = APPEND (CONS x t) (REVAPPEND p (CONS x t)) <=>
                l = APPEND t (REVAPPEND (CONS x p) t)`,
   REWRITE_TAC[REVAPPEND_CLAUSES; APPEND; CONS_11]);;
