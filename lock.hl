@@ -41,7 +41,7 @@ let REVAPPEND_CLAUSES = prove
 
 let REVERSE_EQ_REVAPPEND = prove
  (`!l:A list. REVERSE l = REVAPPEND l []`,
-e (REWRITE_TAC[REVAPPEND; APPEND_NIL]);;
+  REWRITE_TAC[REVAPPEND; APPEND_NIL]);;
 
 (* ------------------------------------------------------------------------- *)
 (* First example.                                                            *)
