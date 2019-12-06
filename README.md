@@ -66,7 +66,6 @@ ocaml is started automatically.
 
 Then, load HOL Light:
 ```ocaml
-#load "nums.cma";;
 #use "make.ml";;
 load_path := "/home/opam/work" :: !load_path;;
 loadt "kanren-light/make.hl";;
@@ -79,12 +78,11 @@ docker container rm kanren-light
 
 docker run -it -h kanren-light --name kanren-light \
   -v "$PWD:/home/opam/work" \
-  kanren-light /bin/bash
+  kanren-light screen
 ```
 
 In one screen terminal
 ```shell
-screen
 dmtcp_coordinator -q -p 7779
 s
 ```
@@ -115,9 +113,12 @@ docker commit -m "With checkpointed HOL" kanren-light kanren-light-ckpt
 ```shell
 docker container rm kanren-light-ckpt
 
-docker run -it -h kanren-light --name kanren-light-ckpt \
+docker create -it -h kanren-light --name kanren-light-ckpt \
+  --entrypoint "/home/opam/hol-light/dmtcp_restart_script.sh" \
   -v "$PWD:/home/opam/work" \
-  kanren-light-ckpt /bin/bash
+  kanren-light-ckpt
+
+docker start -i kanren-light-ckpt
 ```
 
 Then load kanren light:

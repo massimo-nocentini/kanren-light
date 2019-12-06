@@ -1,4 +1,4 @@
-FROM ocaml/opam2:4.07
+FROM ocaml/opam2:4.05
 
 USER root
 
