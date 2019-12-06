@@ -1,4 +1,4 @@
-- Sistemare secondo esempio della cassaforte.
+- Sistemare secondo esempio della cassaforte (file: lock.hl).
 - Quine: sistemare (usare il goal come constraint? Vedi: FALSE_SLV)
 - File separato di solvers per l'aritmetica? E test separati.
 - Test?
