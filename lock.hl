@@ -260,11 +260,10 @@ let EQ_APPEND_NIL = prove
   (`!l1 l2:A list. l1 = l2 ==> l1 = APPEND [] l2`,
    REWRITE_TAC[APPEND]);;
 
-<<<<<<< HEAD
 let REVERSE_UNIQUE = prove
  (`!l l':A list. REVERSE l =  l' ==> l = REVERSE l'`,
   MESON_TAC[REVERSE_REVERSE]);;
-=======
+
 (* Cut goals of the form ?- F *)
 let FALSE_SLV : solver =
   fun (_,(_,w)) as mgl ->
@@ -289,7 +288,6 @@ ee (APPLY_SLV APPEND_CONS_CLAUSE);;
 ee CONS_APPEND_SLV;;
 ss();;
 *)
->>>>>>> WIP on lock.hl
 
 let FOO_SLV : solver =
   (REPEAT_SLV
@@ -301,12 +299,6 @@ let FOO_SLV : solver =
           FALSE_SLV))
       (APPLY_SLV APPEND_REVAPPEND_CONS_RULE)));;
 
-<<<<<<< HEAD
-let L1_SLV : solver =
-  THEN_SLV (APPLY_SLV L1')
-    (TACTIC_SLV (REWRITE_TAC[APPEND]));;
-
-=======
 let L4_HORN_SLV : solver =
   THEN_SLV (APPLY_SLV L4_HORN)
            (THENL_SLV (TACTIC_SLV CONJ_TAC)
@@ -375,7 +367,7 @@ top_thms();;
 let LOCK2_SLV : solver = MAP_COLLECT_SLV APPLY_SLV [L1; L2; L3_HORN; L4_HORN];;
 
 let L1_SLV : solver = THEN_SLV (APPLY_SLV L1_HORN) LIST_EQ_APPEND_SLV;;
->>>>>>> WIP on lock.hl
+
 let L2_SLV : solver = APPLY_SLV L2;;
 
 let L3_SLV : solver =
@@ -396,14 +388,7 @@ let L4_SLV : solver =
       ;
       TACTIC_SLV ALL_TAC]);;
 
-<<<<<<< HEAD
-let LOCK2_STEP_SLV : solver =
-  COLLECT_SLV [L1_SLV; L2_SLV; L3_SLV; L4_SLV];;
 
-gg `LOCK2 [5;4;6;4;2;5;4;6;4;2] [5;4;6;4;2;5;4;6;4;2]`;;
-ee (REPEAT_SLV LOCK2_STEP_SLV);;
-top_thms();;
-=======
 let CONS_EQ_APPEND_NIL = prove
  (`!h:A t l1 l2. l1 = [] /\ CONS h t = l2 ==> CONS h t = APPEND l1 l2`,
   MESON_TAC[APPEND]);;
@@ -500,4 +485,3 @@ tt (REWRITE_TAC[APPEND]);;
 ee (APPLY_SLV L1_HORN);;
 tt (REWRITE_TAC[APPEND]);;
 let Cons (Some (_, th), _) = top_thms();;
->>>>>>> WIP on lock.hl
