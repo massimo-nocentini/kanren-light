@@ -1,12 +1,10 @@
 (* ========================================================================= *)
 (* Semicertified interactive logic programming.                              *)
 (*                                                                           *)
+(* Examples from The Mystery of the Monte Carlo Lock.                        *)
+(*                                                                           *)
 (* Copyright (c) 2017-2019 Marco Maggesi, Massimo Nocentini                  *)
 (* ========================================================================= *)
-
-(* ------------------------------------------------------------------------- *)
-(* Examples from The Mystery of the Monte Carlo Lock.                        *)
-(* ------------------------------------------------------------------------- *)
 
 (* ------------------------------------------------------------------------- *)
 (* Further solvers.                                                          *)
@@ -18,18 +16,8 @@ let FALSE_SLV : solver =
     if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
 
 (* ------------------------------------------------------------------------- *)
-(* Miscellanea on lists.                                                     *)
+(* Reverse append.                                                           *)
 (* ------------------------------------------------------------------------- *)
-
-g `!l:A list. l = APPEND [] l`;;
-e (REWRITE_TAC[APPEND]);;
-let REFL_APPEND_NIL = top_thm();;
-
-g `!h:A t t' l1 l2.
-     l1 = CONS h t' /\ t = APPEND t' l2 ==> CONS h t = APPEND l1 l2`;;
-e (REPEAT STRIP_TAC THEN REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC));;
-e (REWRITE_TAC[APPEND]);;
-let CONS_EQ_APPEND = top_thm();;
 
 let REVAPPEND = new_definition
   `REVAPPEND p t : A list = APPEND (REVERSE p) t`;;
@@ -71,26 +59,26 @@ let LOCK_RULES,LOCK_INDUCT,LOCK_CASES = new_inductive_definition
 
 let LOCK_RULE1,LOCK_RULE2 = CONJ_PAIR LOCK_RULES;;
 
-g `!x y z. LOCK x y /\ z = APPEND y (CONS 2 y) ==> LOCK (CONS 3 x) z`;;
-e (MESON_TAC[LOCK_RULE2]);;
-let LOCK_RULE2' = top_thm();;
+let LOCK_RULE2_HORN = prove
+ (`!x y z. z = APPEND y (CONS 2 y) /\ LOCK x y ==> LOCK (CONS 3 x) z`,
+  MESON_TAC[LOCK_RULE2]);;
 
 (* ------------------------------------------------------------------------- *)
 (* Solution using tactics.                                                   *)
 (* ------------------------------------------------------------------------- *)
 
 g `LOCK [3;2;3] [3;2;3]`;;
-e (MATCH_MP_TAC LOCK_RULE2');;
+e (MATCH_MP_TAC LOCK_RULE2_HORN);;
 e (EXISTS_TAC `[3]`);;
 e (REWRITE_TAC[APPEND]);;
 e (MATCH_ACCEPT_TAC LOCK_RULE1);;
 top_thm();;
 
-MESON
+time MESON
   [LOCK_RULES; APPEND]
   `LOCK [3;2;3] [3;2;3]`;;
 
-METIS
+time METIS
   [LOCK_RULES; APPEND]
   `LOCK [3;2;3] [3;2;3]`;;
 
@@ -98,53 +86,46 @@ METIS
 (* Solution using solvers.                                                   *)
 (* ------------------------------------------------------------------------- *)
 
-gg `??x. LOCK x x`;;
-ee (APPLY_SLV LOCK_RULE1);;
-bb();;
-ee (APPLY_SLV LOCK_RULE2);;
-bb();;
-ee (APPLY_SLV LOCK_RULE2');;
-tt CONJ_TAC;;
-ee (APPLY_SLV LOCK_RULE1);;
-ee (APPLY_SLV CONS_EQ_APPEND);;
-tt CONJ_TAC;;
-ee REFL_SLV;;
-ee (APPLY_SLV REFL_APPEND_NIL);;
-top_thm1();;
+let LOCK_RULE1_SLV : solver =
+  APPLY_SLV LOCK_RULE1;;
 
-let STEP_SLV : solver =
-  COLLECT_SLV
-    [TACTIC_SLV CONJ_TAC;
-     REFL_SLV;
-     ACCEPT_SLV LOCK_RULE1;
-     RULE_SLV LOCK_RULE2';
-     ACCEPT_SLV REFL_APPEND_NIL;
-     RULE_SLV CONS_EQ_APPEND];;
+let LOCK_RULE2_SLV : solver -> solver =
+  fun slv ->
+    THEN_SLV (APPLY_SLV LOCK_RULE2_HORN)
+             (THENL_SLV (TACTIC_SLV CONJ_TAC)
+                        [LIST_EQ_APPEND_SLV;
+                         slv]);;
 
-let rec SEARCH_SLV : solver =
-  REPEAT_SLV STEP_SLV;;
+let rec LOCK_SLV : solver =
+  fun g ->
+    CONCAT_SLV LOCK_RULE1_SLV
+               (LOCK_RULE2_SLV LOCK_SLV) g;;
 
-gg `??x. LOCK x x`;;
-ee SEARCH_SLV;;
-let sols = top_thms();;
+let sols = solve LOCK_SLV `??x. LOCK x x`;;
 
-(* Alternative method. *)
-let rec SEARCH_ALT_SLV : solver =
-  fun g -> CONCAT_SLV (TACTIC_SLV ALL_TAC)
-                      (THEN_SLV STEP_SLV SEARCH_SLV) g;;
+(* The first solution. *)
+get sols;;
 
-let default : 'a option -> 'a =
-  function
-      Some x -> x
-    | None -> failwith "default";;
-
-gg `??x. LOCK x x`;;
-ee SEARCH_ALT_SLV;;
-let sols_alt = stream_mapfilter default (top_thms ());;
 (* [3;2;3] è l'unico punto fisso, se cerchiamo altre soluzioni diverge.
-   drop 1 sols;;
+   next sols;;
 *)
 
+(* ------------------------------------------------------------------------- *)
+(* Miscellanea on lists.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+(* TODO: Remove *)
+(*
+g `!l:A list. l = APPEND [] l`;;
+e (REWRITE_TAC[APPEND]);;
+let REFL_APPEND_NIL = top_thm();;
+
+g `!h:A t t' l1 l2.
+     l1 = CONS h t' /\ t = APPEND t' l2 ==> CONS h t = APPEND l1 l2`;;
+e (REPEAT STRIP_TAC THEN REPEAT (FIRST_X_ASSUM SUBST_VAR_TAC));;
+e (REWRITE_TAC[APPEND]);;
+let CONS_EQ_APPEND = top_thm();;
+*)
 
 (* ------------------------------------------------------------------------- *)
 (* Second example.                                                           *)
