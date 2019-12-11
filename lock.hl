@@ -162,8 +162,8 @@ let L1_HORN = prove
   MESON_TAC[L1]);;
 
 let L3_HORN = prove
- (`!x y z. z = REVERSE y /\ LOCK2 x y ==> LOCK2 (CONS 4 x) z`,
-  MESON_TAC[L3]);;
+ (`!x y z. REVERSE z = y /\ LOCK2 x y ==> LOCK2 (CONS 4 x) z`,
+  MESON_TAC[L3; REVERSE_REVERSE]);;
 
 let L4_HORN = prove
  (`!x y z. z = APPEND y y /\ LOCK2 x y ==> LOCK2 (CONS 5 x) z`,
@@ -189,21 +189,94 @@ e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND]
 e (MATCH_ACCEPT_TAC L1);;
 top_thm();;
 
+let COMPUTE_REVERSE_TAC : tactic =
+  GEN_REWRITE_TAC LAND_CONV [REVERSE_EQ_REVAPPEND] THEN
+  REWRITE_TAC[REVAPPEND_CLAUSES];;
+
+let EQ_REVERSE_SLV : solver =
+  THEN_SLV (TACTIC_SLV COMPUTE_REVERSE_TAC) REFL_SLV;;
+
+let LOCK_1_SLV : solver =
+  THEN_SLV (RULE_SLV L1_HORN)
+           (THEN_SLV (TACTIC_SLV (REWRITE_TAC[APPEND])) REFL_SLV);;
+
+let LOCK_2_SLV : solver =
+  RULE_SLV L2;;
+
+let LOCK_3_SLV : solver =
+  THEN_SLV (RULE_SLV L3_HORN)
+           (THENL_SLV (TACTIC_SLV CONJ_TAC)
+            [EQ_REVERSE_SLV; TACTIC_SLV ALL_TAC]);;
+
 let LOCK_4_SLV : solver =
   THEN_SLV (RULE_SLV L4_HORN)
    (THENL_SLV (TACTIC_SLV CONJ_TAC) [LIST_EQ_APPEND_SLV; TACTIC_SLV ALL_TAC]);;
 
+let LOCK_1_SLV : solver = TRACEON_SLV "L1" LOCK_1_SLV;;
+let LOCK_2_SLV : solver = TRACEON_SLV "L2" LOCK_2_SLV;;
+let LOCK_3_SLV : solver = TRACEON_SLV "L3" LOCK_3_SLV;;
+let LOCK_4_SLV : solver = TRACEON_SLV "L4" LOCK_4_SLV;;
+
+let PRINT_TAC : tactic -> tactic =
+  fun tac g ->
+    let gstate = tac g in
+    print_goalstate gstate;
+    gstate;;
+
+let PRINT_SLV : solver -> solver =
+  let f gstate =
+    print_goalstate gstate;
+    gstate in
+  fun slv g ->
+    let gstates = slv g in
+    if gstates = Empty
+    then (trace "PRINT_SLV: No solutions"; Empty)
+    else stream_map f gstates;;
+
+let rec LOCK2_SLV : int -> solver =
+  fun d g ->
+    trace (string_of_int d);
+    if d > 7 then Empty else
+    CONCAT_SLV LOCK_1_SLV
+      (THEN_SLV
+        (PRINT_SLV
+          (INTERLEAVE_SLV [LOCK_2_SLV;
+                           LOCK_3_SLV;
+                           LOCK_4_SLV])) (LOCK2_SLV (d + 1)))
+      g;;
+
 gg `??l. LOCK2 l l`;;
+ee (LOCK2_SLV 0);;
+
 ee LOCK_4_SLV;;
-ee 
-(THEN_SLV
- (RULE_SLV L3_HORN)
-(THENL_SLV (TACTIC_SLV CONJ_TAC) [TACTIC_SLV ALL_TAC; TACTIC_SLV ALL_TAC]));;
-ss();;
+ee LOCK_3_SLV;;
+ee (RULE_SLV L2);;
+ee (RULE_SLV L1_HORN);;
+tt (REWRITE_TAC[APPEND]);;
+
+
+let REVERSE_THM = prove
+ (`!l m:A list. l = REVERSE m <=> l = REVAPPEND m []`,
+  REWRITE_TAC[REVERSE_EQ_REVAPPEND]);;
+
+(!l:A list. l = REVEAPPEND [] l) /\
+(CONS h t = REVAPPEND (CONS h t) m
 
 (* ------------------------------------------------------------------------- *)
 (* HIC SUNT LEONES!!!                                                        *)
 (* ------------------------------------------------------------------------- *)
+
+
+(*
+let REVERSE_UNIQUE = prove
+ (`!l l':A list. l = REVERSE l' <=> REVERSE l = l'`,
+  MESON_TAC[REVERSE_REVERSE]);;
+
+let COMPUTE_REVERSE_TAC : tactic =
+  GEN_REWRITE_TAC I [REVERSE_UNIQUE] THEN
+  REWRITE_TAC[REVAPPEND_CLAUSES];;
+*)
+
 
 let LIST_CLAUSES = prove
  (`(!l1 l2:A list. l1 = [] /\ l2 = [] ==> APPEND l1 l2 = []) /\
@@ -255,13 +328,8 @@ let EQ_APPEND_NIL = prove
    REWRITE_TAC[APPEND]);;
 
 let REVERSE_UNIQUE = prove
- (`!l l':A list. REVERSE l =  l' ==> l = REVERSE l'`,
+ (`!l l':A list. REVERSE l = l' ==> l = REVERSE l'`,
   MESON_TAC[REVERSE_REVERSE]);;
-
-(* Cut goals of the form ?- F *)
-let FALSE_SLV : solver =
-  fun (_,(_,w)) as mgl ->
-    if w = `F` then Empty else TACTIC_SLV ALL_TAC mgl;;
 
 (* NON FUNZIONA *)
 (*)
