@@ -189,6 +189,22 @@ e (GEN_REWRITE_TAC LAND_CONV [GSYM (REWRITE_CONV [APPEND]
 e (MATCH_ACCEPT_TAC L1);;
 top_thm();;
 
+let REVAPPEND_RULES = prove
+ (`(!l:A list. l = REVAPPEND [] l) /\
+   (!x:A l m p. l = REVAPPEND m (CONS x p) ==> l = REVAPPEND (CONS x m) p)`,
+  REWRITE_TAC[REVAPPEND_CLAUSES]);;
+
+let REVAPPEND_HORN1,REVAPPEND_HORN2 = CONJ_PAIR REVAPPEND_RULES;;
+
+gg `??m n. [1;2;3] = REVAPPEND m n`;;
+ee (ACCEPT_SLV REVAPPEND_HORN1);;
+list_of_stream (top_thms());;
+ee (RULE_SLV REVAPPEND_HORN2);;
+
+ee (CONCAT_SLV (ACCEPT_SLV REVAPPEND_HORN1)
+               (RULE_SLV REVAPPEND_HORN2));;
+ss();;
+
 let COMPUTE_REVERSE_TAC : tactic =
   GEN_REWRITE_TAC LAND_CONV [REVERSE_EQ_REVAPPEND] THEN
   REWRITE_TAC[REVAPPEND_CLAUSES];;
@@ -245,13 +261,33 @@ let rec LOCK2_SLV : int -> solver =
                            LOCK_4_SLV])) (LOCK2_SLV (d + 1)))
       g;;
 
+let pth1,pth2 = CONJ_PAIR LIST_EQ_APPEND_HORN;;
+
+let pslv1 = ACCEPT_SLV pth1;;
+let pslv2 = RULE_SLV pth2;;
+
+let LIST_EQ_APPEND_SLV : solver =
+  REPEAT_SLV (CONCAT_SLV pslv1 pslv2);;
+
+let rec LIST_EQ_APPEND_SLV : solver =
+  fun g -> (CONCAT_SLV pslv1 (THEN_SLV pslv2 LIST_EQ_APPEND_SLV)) g;;
+
+gg `[5; 4; 6; 2] = APPEND [6; 4; 5] [2]`;;
+ee pslv2;;
+top_thms();;
+
 gg `??l. LOCK2 l l`;;
 ee (LOCK2_SLV 0);;
 
 ee LOCK_4_SLV;;
 ee LOCK_3_SLV;;
 ee (RULE_SLV L2);;
-ee (RULE_SLV L1_HORN);;
+ee (PRINT_SLV (RULE_SLV L1_HORN));;
+ee pslv1;;
+ee pslv2;;
+
+ee (THEN_SLV (RULE_SLV L1_HORN) (PRINT_SLV LIST_EQ_APPEND_SLV));;
+ee (LIST_EQ_APPEND_SLV);;
 tt (REWRITE_TAC[APPEND]);;
 
 
