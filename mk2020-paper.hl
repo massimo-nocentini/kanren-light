@@ -1,0 +1,21 @@
+(* ========================================================================= *)
+(* Semicertified interactive logic programming.                              *)
+(*                                                                           *)
+(* Examples for the paper submitted to miniKanren2020.                       *)
+(*                                                                           *)
+(* Copyright (c) 2017-2020 Marco Maggesi, Massimo Nocentini                  *)
+(* ========================================================================= *)
+
+gg `??x. 2 + 2 = x`;;
+ee REFL_SLV;;
+list_of_stream(top_thms());;
+bb();;
+ee (ACCEPT_SLV(ARITH_RULE `2 + 2 = 4`));;
+list_of_stream(top_thms());;
+bb();;
+ee (CONCAT_SLV REFL_SLV (ACCEPT_SLV(ARITH_RULE `2 + 2 = 4`)));;
+list_of_stream(top_thms());;
+
+list_of_stream (
+    solve (CONCAT_SLV REFL_SLV (ACCEPT_SLV(ARITH_RULE `2 + 2 = 4`))) 
+          `??x. 2 + 2 = x`);;
